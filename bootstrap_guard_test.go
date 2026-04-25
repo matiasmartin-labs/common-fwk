@@ -9,7 +9,6 @@ import (
 
 var bootstrapPackageDirs = []string{
 	"app",
-	"config",
 	"config/viper",
 	"security",
 	"http/gin",
@@ -55,6 +54,30 @@ func TestBootstrapPackagesRemainStructuralOnly(t *testing.T) {
 				t.Fatalf("business behavior detected in %q: functions are not allowed during bootstrap", docPath)
 			}
 		})
+	}
+}
+
+func TestConfigPackageCanEvolveBeyondBootstrapDocs(t *testing.T) {
+	t.Helper()
+
+	entries, err := os.ReadDir("config")
+	if err != nil {
+		t.Fatalf("read config dir: %v", err)
+	}
+
+	goFiles := make([]string, 0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		if strings.HasSuffix(entry.Name(), ".go") {
+			goFiles = append(goFiles, entry.Name())
+		}
+	}
+
+	if len(goFiles) <= 1 {
+		t.Fatalf("config package must be allowed to include implementation files beyond doc.go, got %v", goFiles)
 	}
 }
 

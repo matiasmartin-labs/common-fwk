@@ -1,31 +1,11 @@
-# Framework Bootstrap Specification
+# Delta for framework-bootstrap
 
-## Purpose
-
-Define the minimal Go module and package scaffold required by issue #1 so the repository compiles without introducing business behavior.
-
-## Requirements
-
-### Requirement: Module and package scaffold compiles
-
-The repository MUST declare module path `github.com/matiasmartin-labs/common-fwk` and SHALL provide these Go packages as tracked, compilable package boundaries: `app`, `config`, `config/viper`, `security`, `http/gin`, and `errors`.
-
-#### Scenario: Bootstrap scaffold compiles from repository root
-
-- GIVEN the bootstrap scaffold is present in the repository
-- WHEN `go test ./...` is executed from repository root
-- THEN command execution succeeds with exit code `0`
-- AND each listed package is discovered as a valid Go package
-
-#### Scenario: Minimal package stubs remain compilable
-
-- GIVEN each bootstrap package contains only minimal stub files (for example package docs)
-- WHEN `go test ./...` is executed
-- THEN compilation still succeeds without requiring runtime implementation
+## MODIFIED Requirements
 
 ### Requirement: Bootstrap contains no business logic
 
 Bootstrap artifacts created for the initial bootstrap phase MUST NOT include runtime/business behavior; they SHALL be limited to module metadata, package declarations/docs, and CI wiring needed for compile/test validation. This guard SHALL remain applicable to bootstrap-only packages, and SHALL NOT prevent implementation growth in packages explicitly evolved by later approved capabilities (including `config` for `config-core`).
+(Previously: Structural-only expectations could be read as applying broadly to `config`, blocking later capability work.)
 
 #### Scenario: Bootstrap files are structural only
 
