@@ -1,0 +1,93 @@
+name: pr-validation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  check-issue-reference:
+    name: Check Issue Reference
+    runs-on: ubuntu-latest
+    outputs:
+      issue_number: ${{ steps.extract.outputs.issue_number }}
+    steps:
+      - name: Extract linked issue from PR body
+        id: extract
+        shell: bash
+        run: |
+          set -euo pipefail
+          body='${{ github.event.pull_request.body }}'
+
+          if [[ "$body" =~ ([Cc]loses|[Ff]ixes|[Rr]esolves)[[:space:]]+#[[:space:]]*([0-9]+) ]]; then
+            issue_number="${BASH_REMATCH[2]}"
+            echo "issue_number=${issue_number}" >> "$GITHUB_OUTPUT"
+            echo "Linked issue detected: #${issue_number}"
+          else
+            echo "PR body must include one issue-closing reference: Closes #N, Fixes #N, or Resolves #N"
+            exit 1
+          fi
+
+  check-issue-approved:
+    name: Check Issue Has status:approved
+    runs-on: ubuntu-latest
+    needs: check-issue-reference
+    steps:
+      - name: Validate linked issue labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = Number('${{ needs.check-issue-reference.outputs.issue_number }}');
+
+            if (!Number.isInteger(issue_number) || issue_number <= 0) {
+              core.setFailed('Invalid issue number extracted from PR body.');
+              return;
+            }
+
+            const issue = await github.rest.issues.get({ owner, repo, issue_number });
+            const labels = issue.data.labels.map((l) => typeof l === 'string' ? l : l.name);
+
+            if (!labels.includes('status:approved')) {
+              core.setFailed(`Linked issue #${issue_number} must include label 'status:approved'. Current labels: ${labels.join(', ') || '(none)'}`);
+              return;
+            }
+
+            core.info(`Issue #${issue_number} is approved.`);
+
+  check-pr-type-label:
+    name: Check PR Has type:* Label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR type labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const typeLabels = labels
+              .map((l) => l.name)
+              .filter((name) => name.startsWith('type:'));
+
+            if (typeLabels.length !== 1) {
+              core.setFailed(
+                `PR must have exactly one type:* label. Found ${typeLabels.length}: ${typeLabels.join(', ') || '(none)'}`
+              );
+              return;
+            }
+
+            core.info(`PR type label validated: ${typeLabels[0]}`);
