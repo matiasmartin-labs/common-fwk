@@ -2,6 +2,8 @@ package jwt
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"testing"
@@ -236,4 +238,132 @@ func first(values []string) string {
 	}
 
 	return values[0]
+}
+
+func generateRSAKeyPair(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate RSA key pair: %v", err)
+	}
+
+	return priv
+}
+
+func mustSignRSAToken(t *testing.T, method jwtlib.SigningMethod, key *rsa.PrivateKey, claims map[string]any, header map[string]any) string {
+	t.Helper()
+
+	token := jwtlib.NewWithClaims(method, jwtlib.MapClaims(claims))
+	for k, v := range header {
+		token.Header[k] = v
+	}
+
+	raw, err := token.SignedString(key)
+	if err != nil {
+		t.Fatalf("sign RSA token: %v", err)
+	}
+
+	return raw
+}
+
+func TestValidatorRS256Scenarios(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.April, 26, 12, 0, 0, 0, time.UTC)
+
+	priv := generateRSAKeyPair(t)
+	otherPriv := generateRSAKeyPair(t)
+
+	resolver := keys.NewRSAResolver(priv, "rsa-key")
+
+	v, err := NewValidator(Options{
+		Methods:  []string{"RS256"},
+		Issuer:   "common-fwk",
+		Audience: []string{"mobile-app"},
+		Now: func() time.Time {
+			return now
+		},
+		Resolver: resolver,
+	})
+	if err != nil {
+		t.Fatalf("new validator: %v", err)
+	}
+
+	validToken := mustSignRSAToken(t, jwtlib.SigningMethodRS256, priv, map[string]any{
+		"iss": "common-fwk",
+		"aud": []string{"mobile-app"},
+		"exp": now.Add(5 * time.Minute).Unix(),
+		"nbf": now.Add(-1 * time.Minute).Unix(),
+		"sub": "user-rsa",
+		"jti": "token-rsa-1",
+	}, nil)
+
+	invalidSignatureToken := mustSignRSAToken(t, jwtlib.SigningMethodRS256, otherPriv, map[string]any{
+		"iss": "common-fwk",
+		"aud": []string{"mobile-app"},
+		"exp": now.Add(5 * time.Minute).Unix(),
+		"nbf": now.Add(-1 * time.Minute).Unix(),
+	}, nil)
+
+	expiredToken := mustSignRSAToken(t, jwtlib.SigningMethodRS256, priv, map[string]any{
+		"iss": "common-fwk",
+		"aud": []string{"mobile-app"},
+		"exp": now.Add(-1 * time.Minute).Unix(),
+		"nbf": now.Add(-2 * time.Minute).Unix(),
+	}, nil)
+
+	tests := []struct {
+		name         string
+		raw          string
+		wantSentinel error
+		assertClaims func(t *testing.T, got map[string]any)
+	}{
+		{
+			name: "RS256 valid token",
+			raw:  validToken,
+			assertClaims: func(t *testing.T, got map[string]any) {
+				t.Helper()
+				if got["subject"] != "user-rsa" {
+					t.Fatalf("expected subject user-rsa, got %v", got["subject"])
+				}
+			},
+		},
+		{name: "RS256 invalid signature", raw: invalidSignatureToken, wantSentinel: ErrInvalidSignature},
+		{name: "RS256 expired token", raw: expiredToken, wantSentinel: ErrExpiredToken},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := v.Validate(context.Background(), tc.raw)
+			if tc.wantSentinel == nil {
+				if err != nil {
+					t.Fatalf("expected success, got %v", err)
+				}
+
+				if tc.assertClaims != nil {
+					tc.assertClaims(t, map[string]any{
+						"subject": got.Subject,
+					})
+				}
+				return
+			}
+
+			if err == nil {
+				t.Fatalf("expected error wrapping %v", tc.wantSentinel)
+			}
+
+			if !errors.Is(err, tc.wantSentinel) {
+				t.Fatalf("expected sentinel %v, got %v", tc.wantSentinel, err)
+			}
+
+			var vErr *ValidationError
+			if !errors.As(err, &vErr) {
+				t.Fatalf("expected ValidationError wrapper, got %T", err)
+			}
+		})
+	}
 }
