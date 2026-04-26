@@ -34,3 +34,44 @@ if err != nil {
 
 // validated.Security.Auth.Login.Email == "admin@example.com"
 ```
+
+## Optional Viper adapter usage
+
+```go
+loaded, err := viper.Load(viper.Options{
+	ConfigPath:  "./config/app.yaml",
+	ConfigType:  "",          // infer from extension when empty
+	EnvPrefix:   "COMMON_FWK", // default when omitted
+	EnvOverride: true,          // env values override file values
+	ExpandEnv:   true,          // expand ${VAR} placeholders from env snapshot
+})
+if err != nil {
+	var loadErr *viper.LoadError
+	var decodeErr *viper.DecodeError
+	var mapErr *viper.MappingError
+	var validateErr *viper.ValidationError
+
+	switch {
+	case errors.As(err, &loadErr):
+		// file access or option/application failure
+	case errors.As(err, &decodeErr):
+		// parse/unmarshal failure
+	case errors.As(err, &mapErr):
+		// explicit raw -> core mapping failure
+	case errors.As(err, &validateErr):
+		// wraps config.ValidateConfig failures
+	}
+
+	if errors.Is(err, config.ErrInvalidConfig) {
+		// preserved core classification through ValidationError wrapping
+	}
+}
+
+_ = loaded
+```
+
+Behavior notes:
+- `EnvOverride=false` keeps file values as source of truth.
+- `EnvOverride=true` applies env values using `EnvPrefix` and deterministic keys (for example `COMMON_FWK_SECURITY_AUTH_JWT_SECRET`).
+- `ExpandEnv=false` preserves `${VAR}` placeholders.
+- `ExpandEnv=true` expands placeholders against a per-load env snapshot deterministically.

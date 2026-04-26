@@ -9,7 +9,6 @@ import (
 
 var bootstrapPackageDirs = []string{
 	"app",
-	"config/viper",
 	"security",
 	"http/gin",
 	"errors",
@@ -78,6 +77,30 @@ func TestConfigPackageCanEvolveBeyondBootstrapDocs(t *testing.T) {
 
 	if len(goFiles) <= 1 {
 		t.Fatalf("config package must be allowed to include implementation files beyond doc.go, got %v", goFiles)
+	}
+}
+
+func TestConfigViperPackageCanEvolveBeyondBootstrapDocs(t *testing.T) {
+	t.Helper()
+
+	entries, err := os.ReadDir("config/viper")
+	if err != nil {
+		t.Fatalf("read config/viper dir: %v", err)
+	}
+
+	goFiles := make([]string, 0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		if strings.HasSuffix(entry.Name(), ".go") {
+			goFiles = append(goFiles, entry.Name())
+		}
+	}
+
+	if len(goFiles) <= 1 {
+		t.Fatalf("config/viper package must include implementation files beyond doc.go, got %v", goFiles)
 	}
 }
 
