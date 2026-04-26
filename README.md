@@ -75,3 +75,45 @@ Behavior notes:
 - `EnvOverride=true` applies env values using `EnvPrefix` and deterministic keys (for example `COMMON_FWK_SECURITY_AUTH_JWT_SECRET`).
 - `ExpandEnv=false` preserves `${VAR}` placeholders.
 - `ExpandEnv=true` expands placeholders against a per-load env snapshot deterministically.
+
+## Security core JWT validation
+
+`security/*` provides a framework-agnostic JWT validation core with deterministic dependencies.
+
+```go
+jwtCfg := config.NewJWTConfig("secret", "common-fwk", 15)
+compat := securityjwt.FromConfigJWT(jwtCfg)
+
+validator, err := securityjwt.NewValidator(compat.Options)
+if err != nil {
+	// invalid validator options (for example missing resolver)
+}
+
+validatedClaims, err := validator.Validate(ctx, rawToken)
+if err != nil {
+	if errors.Is(err, securityjwt.ErrInvalidMethod) {
+		// token alg is not in allowlist
+	}
+	if errors.Is(err, securityjwt.ErrExpiredToken) {
+		// token exp is before validator clock
+	}
+
+	var vErr *securityjwt.ValidationError
+	if errors.As(err, &vErr) {
+		// inspect stage metadata while preserving sentinel assertability
+	}
+}
+
+_ = validatedClaims
+_ = compat.TokenTTL // token issuing concern, not validator runtime enforcement
+```
+
+Package boundaries:
+- `security/claims`: standard claim model and audience normalization helpers.
+- `security/keys`: deterministic key resolution contracts (`kid` + default key fallback).
+- `security/jwt`: validator options, typed/sentinel error taxonomy, validation flow, config compatibility helper.
+
+Explicit non-goals of this security core:
+- no Gin middleware coupling
+- no app-global singleton coupling
+- no OAuth/JWKS provider adapter/network fetch coupling

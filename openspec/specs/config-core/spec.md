@@ -42,7 +42,7 @@ The config core SHALL provide explicit constructors/builders for root and nested
 
 ### Requirement: Validation and normalization baseline
 
-The config core MUST provide validation entrypoints for baseline domains (server, JWT, cookie, login, OAuth2 generic). Validation errors SHALL be assertable through a stable error taxonomy (including `ErrXxx` sentinels where applicable). Login email normalization SHALL trim surrounding whitespace and lowercase the result before validation success is reported. Integrating adapters MUST preserve core validation assertability when wrapping returned validation errors.
+The config core MUST provide validation entrypoints for domains (server, JWT, cookie, login, OAuth2 generic). Validation errors SHALL be assertable through a stable taxonomy (`ErrXxx` sentinels). Login email normalization SHALL trim whitespace and lowercase before validation success. Integrating adapters MUST preserve core validation assertability when wrapping validation errors. JWT field semantics (`secret`, `issuer`, `expiry`) SHALL remain backward-compatible and MUST map to security-core validator options without runtime validation coupling in `config`.
 
 #### Scenario: Baseline validation succeeds for compliant config
 
