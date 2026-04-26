@@ -9,8 +9,6 @@ import (
 
 var bootstrapPackageDirs = []string{
 	"app",
-	"security",
-	"http/gin",
 	"errors",
 }
 
@@ -53,6 +51,54 @@ func TestBootstrapPackagesRemainStructuralOnly(t *testing.T) {
 				t.Fatalf("business behavior detected in %q: functions are not allowed during bootstrap", docPath)
 			}
 		})
+	}
+}
+
+func TestSecurityPackageCanEvolveBeyondBootstrapDocs(t *testing.T) {
+	t.Helper()
+
+	entries, err := os.ReadDir("security")
+	if err != nil {
+		t.Fatalf("read security dir: %v", err)
+	}
+
+	goFiles := make([]string, 0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		if strings.HasSuffix(entry.Name(), ".go") {
+			goFiles = append(goFiles, entry.Name())
+		}
+	}
+
+	if len(goFiles) <= 1 {
+		t.Fatalf("security package must be allowed to include implementation files beyond doc.go, got %v", goFiles)
+	}
+}
+
+func TestHTTPGinPackageCanEvolveBeyondBootstrapDocs(t *testing.T) {
+	t.Helper()
+
+	entries, err := os.ReadDir("http/gin")
+	if err != nil {
+		t.Fatalf("read http/gin dir: %v", err)
+	}
+
+	goFiles := make([]string, 0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		if strings.HasSuffix(entry.Name(), ".go") {
+			goFiles = append(goFiles, entry.Name())
+		}
+	}
+
+	if len(goFiles) <= 1 {
+		t.Fatalf("http/gin package must include implementation files beyond doc.go, got %v", goFiles)
 	}
 }
 
