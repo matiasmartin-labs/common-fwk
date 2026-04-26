@@ -7,11 +7,14 @@ import (
 )
 
 const (
-	defaultHeaderName  = "Authorization"
-	defaultCookieName  = "token"
-	defaultContextKey  = "claims"
-	msgTokenMissing    = "authentication token is missing"
-	msgTokenInvalid    = "authentication token is invalid"
+	defaultHeaderName = "Authorization"
+	defaultCookieName = "token"
+	defaultContextKey = "claims"
+
+	// MsgTokenMissing is the canonical error message returned when no token is present in the request.
+	MsgTokenMissing = "missing authentication token"
+	// MsgTokenInvalid is the canonical error message returned when the token is invalid or expired.
+	MsgTokenInvalid = "invalid or expired token"
 )
 
 type options struct {
@@ -80,13 +83,13 @@ func NewAuthMiddleware(validator security.Validator, opts ...Option) gin.Handler
 
 		token := extractToken(c, o.headerName, o.cookieName)
 		if token == "" {
-			writeError(c, fwkerrors.CodeTokenMissing, msgTokenMissing)
+			writeError(c, fwkerrors.CodeTokenMissing, MsgTokenMissing)
 			return
 		}
 
 		cl, err := validator.Validate(c.Request.Context(), token)
 		if err != nil {
-			writeError(c, fwkerrors.CodeTokenInvalid, msgTokenInvalid)
+			writeError(c, fwkerrors.CodeTokenInvalid, MsgTokenInvalid)
 			return
 		}
 

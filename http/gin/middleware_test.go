@@ -389,7 +389,7 @@ func TestAuthMiddleware_WrappedValidationError_MapsToInvalid(t *testing.T) {
 		t.Fatalf("expected auth_token_invalid got %q", resp.Code)
 	}
 	// Ensure internal error details are NOT leaked in the message.
-	if resp.Message != "authentication token is invalid" {
+	if resp.Message != ginfwk.MsgTokenInvalid {
 		t.Fatalf("unexpected message leak: %q", resp.Message)
 	}
 }
