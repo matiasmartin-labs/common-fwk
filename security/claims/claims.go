@@ -62,6 +62,10 @@ type Claims struct {
 	NotBefore *time.Time             `json:"nbf,omitempty"`
 	IssuedAt  *time.Time             `json:"iat,omitempty"`
 	JWTID     string                 `json:"jti,omitempty"`
+	Email     string                 `json:"email,omitempty"`
+	Name      string                 `json:"name,omitempty"`
+	Picture   string                 `json:"picture,omitempty"`
+	Roles     []string               `json:"roles,omitempty"`
 	Private   map[string]interface{} `json:"-"`
 }
 
