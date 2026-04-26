@@ -171,10 +171,39 @@ func claimsFromToken(token *jwtlib.Token) (claims.Claims, error) {
 		mapped.IssuedAt = &iat
 	}
 
+	if email, ok := mapClaims["email"].(string); ok {
+		mapped.Email = email
+	}
+	if name, ok := mapClaims["name"].(string); ok {
+		mapped.Name = name
+	}
+	if picture, ok := mapClaims["picture"].(string); ok {
+		mapped.Picture = picture
+	}
+	switch rv := mapClaims["roles"].(type) {
+	case []interface{}:
+		roles := make([]string, 0, len(rv))
+		for _, elem := range rv {
+			if s, ok := elem.(string); ok {
+				roles = append(roles, s)
+			}
+		}
+		if len(roles) > 0 {
+			mapped.Roles = roles
+		}
+	case []string:
+		if len(rv) > 0 {
+			out := make([]string, len(rv))
+			copy(out, rv)
+			mapped.Roles = out
+		}
+	}
+
 	private := make(map[string]interface{})
 	for key, value := range mapClaims {
 		switch key {
-		case "iss", "sub", "aud", "exp", "nbf", "iat", "jti":
+		case "iss", "sub", "aud", "exp", "nbf", "iat", "jti",
+			"email", "name", "picture", "roles":
 			continue
 		default:
 			private[key] = value

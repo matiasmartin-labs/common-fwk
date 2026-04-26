@@ -167,6 +167,179 @@ func TestValidatorValidateScenarios(t *testing.T) {
 	}
 }
 
+func TestClaimsFromTokenOIDCFields(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.April, 26, 12, 0, 0, 0, time.UTC)
+
+	resolver := keys.NewStaticResolver(
+		&keys.Key{ID: "default", Method: "HS256", Verify: []byte("secret")},
+		nil,
+	)
+
+	v, err := NewValidator(Options{
+		Methods: []string{"HS256"},
+		Now:     func() time.Time { return now },
+		Resolver: resolver,
+	})
+	if err != nil {
+		t.Fatalf("new validator: %v", err)
+	}
+
+	base := map[string]any{
+		"exp": now.Add(5 * time.Minute).Unix(),
+	}
+
+	merge := func(extra map[string]any) map[string]any {
+		m := make(map[string]any, len(base)+len(extra))
+		for k, v := range base {
+			m[k] = v
+		}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return m
+	}
+
+	tests := []struct {
+		name         string
+		payload      map[string]any
+		assertClaims func(t *testing.T, c interface{})
+	}{
+		{
+			name: "all four OIDC fields populated",
+			payload: merge(map[string]any{
+				"email":   "alice@example.com",
+				"name":    "Alice",
+				"picture": "https://example.com/pic.png",
+				"roles":   []interface{}{"admin", "user"},
+			}),
+			assertClaims: func(t *testing.T, c interface{}) {
+				t.Helper()
+				got := c.(map[string]any)
+				if got["email"] != "alice@example.com" {
+					t.Errorf("email: got %v", got["email"])
+				}
+				if got["name"] != "Alice" {
+					t.Errorf("name: got %v", got["name"])
+				}
+				if got["picture"] != "https://example.com/pic.png" {
+					t.Errorf("picture: got %v", got["picture"])
+				}
+				roles := got["roles"].([]string)
+				if len(roles) != 2 || roles[0] != "admin" || roles[1] != "user" {
+					t.Errorf("roles: got %v", roles)
+				}
+			},
+		},
+		{
+			name: "roles as []interface{}",
+			payload: merge(map[string]any{
+				"roles": []interface{}{"editor", "viewer"},
+			}),
+			assertClaims: func(t *testing.T, c interface{}) {
+				t.Helper()
+				got := c.(map[string]any)
+				roles := got["roles"].([]string)
+				if len(roles) != 2 || roles[0] != "editor" || roles[1] != "viewer" {
+					t.Errorf("roles: got %v", roles)
+				}
+			},
+		},
+		{
+			name: "roles as []string",
+			payload: merge(map[string]any{
+				"roles": []string{"ops"},
+			}),
+			assertClaims: func(t *testing.T, c interface{}) {
+				t.Helper()
+				got := c.(map[string]any)
+				roles := got["roles"].([]string)
+				if len(roles) != 1 || roles[0] != "ops" {
+					t.Errorf("roles: got %v", roles)
+				}
+			},
+		},
+		{
+			name:    "absent OIDC fields yield zero values",
+			payload: base,
+			assertClaims: func(t *testing.T, c interface{}) {
+				t.Helper()
+				got := c.(map[string]any)
+				if got["email"] != "" {
+					t.Errorf("email: expected empty, got %v", got["email"])
+				}
+				if got["name"] != "" {
+					t.Errorf("name: expected empty, got %v", got["name"])
+				}
+				if got["picture"] != "" {
+					t.Errorf("picture: expected empty, got %v", got["picture"])
+				}
+				if got["roles"] != nil {
+					t.Errorf("roles: expected nil, got %v", got["roles"])
+				}
+			},
+		},
+		{
+			name: "OIDC keys not present in Private map",
+			payload: merge(map[string]any{
+				"email":   "bob@example.com",
+				"name":    "Bob",
+				"picture": "https://example.com/bob.png",
+				"roles":   []interface{}{"admin"},
+				"custom":  "value",
+			}),
+			assertClaims: func(t *testing.T, c interface{}) {
+				t.Helper()
+				got := c.(map[string]any)
+				private := got["private"].(map[string]interface{})
+				for _, key := range []string{"email", "name", "picture", "roles"} {
+					if _, exists := private[key]; exists {
+						t.Errorf("OIDC key %q should not appear in Private", key)
+					}
+				}
+				if private["custom"] != "value" {
+					t.Errorf("custom private claim missing: %v", private)
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			raw := mustSignToken(t, jwtlib.SigningMethodHS256, []byte("secret"), tc.payload, nil)
+			got, err := v.Validate(context.Background(), raw)
+			if err != nil {
+				t.Fatalf("validate: %v", err)
+			}
+
+			var private map[string]interface{}
+			if got.Private != nil {
+				private = got.Private
+			} else {
+				private = map[string]interface{}{}
+			}
+
+			tc.assertClaims(t, map[string]any{
+				"email":   got.Email,
+				"name":    got.Name,
+				"picture": got.Picture,
+				"roles":   nilIfEmpty(got.Roles),
+				"private": private,
+			})
+		})
+	}
+}
+
+func nilIfEmpty(s []string) interface{} {
+	if len(s) == 0 {
+		return nil
+	}
+	return s
+}
 func TestValidationErrorAssertabilityWhenWrapped(t *testing.T) {
 	t.Parallel()
 
