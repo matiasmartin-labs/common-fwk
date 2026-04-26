@@ -2,6 +2,7 @@ package gin
 
 import (
 	"github.com/gin-gonic/gin"
+	fwkerrors "github.com/matiasmartin-labs/common-fwk/errors"
 	"github.com/matiasmartin-labs/common-fwk/security"
 )
 
@@ -9,8 +10,6 @@ const (
 	defaultHeaderName  = "Authorization"
 	defaultCookieName  = "token"
 	defaultContextKey  = "claims"
-	codeTokenMissing   = "auth_token_missing"
-	codeTokenInvalid   = "auth_token_invalid"
 	msgTokenMissing    = "authentication token is missing"
 	msgTokenInvalid    = "authentication token is invalid"
 )
@@ -81,13 +80,13 @@ func NewAuthMiddleware(validator security.Validator, opts ...Option) gin.Handler
 
 		token := extractToken(c, o.headerName, o.cookieName)
 		if token == "" {
-			writeError(c, codeTokenMissing, msgTokenMissing)
+			writeError(c, fwkerrors.CodeTokenMissing, msgTokenMissing)
 			return
 		}
 
 		cl, err := validator.Validate(c.Request.Context(), token)
 		if err != nil {
-			writeError(c, codeTokenInvalid, msgTokenInvalid)
+			writeError(c, fwkerrors.CodeTokenInvalid, msgTokenInvalid)
 			return
 		}
 
