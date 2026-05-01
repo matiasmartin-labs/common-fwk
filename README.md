@@ -613,13 +613,25 @@ Dependency direction is always inward:
   - This repo provides generic OAuth2 config fields.
   - Concrete Google OAuth flows, APIs, and provider-specific behavior belong to the consuming application/service layer.
 
+## Documentation
+
+Full documentation is available under [`docs/`](docs/index.md) and published to GitHub Pages.
+
+| Section | Path | Description |
+|---|---|---|
+| Home | `docs/index.md` | Landing page and quick reference |
+| Getting Started | `docs/getting-started/` | Installation and quickstart |
+| Architecture | `docs/architecture/` | Canonical specs for each package |
+| Releases | `docs/releases/` | Release notes per version (v0.1.0 → v0.7.0) |
+| Migration Guides | `docs/migration/` | Consumer migration guides |
+| Decisions | `docs/decisions/` | Architecture decision records (ADRs) |
+| Contributing | `docs/contributing/` | SDD workflow and PR conventions |
+
 ## Release and migration docs
 
 - Release workflow label policy:
   - Use exactly one of `release-type:patch`, `release-type:minor`, or `release-type:major` on release PRs.
   - Use `release:skip` to explicitly skip release preview/publication for non-release changes (docs/chore-only PRs).
-  - Legacy labels (`release-type/patch`, `release-type/minor`, `release-type/major`) remain temporarily accepted for migration, but should be replaced.
-- Docs index: `docs/home.md`
-- Release checklist for `v0.2.0`: `docs/releases/v0.2.0-checklist.md`
-- Release checklist for `v0.1.0`: `docs/releases/v0.1.0-checklist.md`
+- Release notes: `docs/releases/` (v0.1.0 through v0.7.0)
 - Migration guide for `auth-provider-ms`: `docs/migration/auth-provider-ms-v0.1.0.md`
+- Documentation structure migration note: `docs/migration/openspec-to-docs.md`
