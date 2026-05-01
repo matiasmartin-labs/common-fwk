@@ -238,6 +238,71 @@ func main() {
 }
 ```
 
+### 5) Application bootstrap boundary (`app`)
+
+`common-fwk/app` now includes an instance-based bootstrap API (no package-level singleton):
+
+```go
+package main
+
+import (
+	"log"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/matiasmartin-labs/common-fwk/app"
+	"github.com/matiasmartin-labs/common-fwk/config"
+	"github.com/matiasmartin-labs/common-fwk/security/keys"
+	securityjwt "github.com/matiasmartin-labs/common-fwk/security/jwt"
+)
+
+func main() {
+	cfg := config.NewConfig(
+		config.NewServerConfig("127.0.0.1", 8080),
+		config.NewSecurityConfig(config.NewAuthConfig(
+			config.NewJWTConfig("secret", "common-fwk", 15),
+			config.NewCookieConfig("session", "example.com", true, true, "Lax"),
+			config.NewLoginConfig("admin@example.com"),
+			config.NewOAuth2Config(nil),
+		)),
+	)
+
+	validator, err := securityjwt.NewValidator(securityjwt.Options{
+		Methods: []string{"HS256"},
+		Issuer:  "common-fwk",
+		Resolver: keys.NewStaticResolver(
+			&keys.Key{Method: "HS256", Verify: []byte("secret")},
+			nil,
+		),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	a := app.NewApplication().
+		UseConfig(cfg).
+		UseServer().
+		UseServerSecurity(validator)
+
+	_ = a.RegisterGET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	_ = a.RegisterProtectedGET("/me", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	if err := a.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+Behavior notes:
+- Register methods return typed sentinel errors when used out of order (for example, server/security not ready).
+- `RegisterProtectedGET` uses `http/gin.NewAuthMiddleware` internally.
+- `RunListener(net.Listener)` is available for test-friendly startup flows.
+
 ---
 
 ## Layered architecture overview
@@ -251,7 +316,10 @@ func main() {
    - `config/viper`: optional config loader adapter into core `config.Config`.
    - `http/gin`: optional HTTP middleware adapter that depends on `security.Validator` interface.
 3. **App boundary**
-   - `app`: application bootstrap boundary.
+- `app`: application bootstrap boundary.
+  - `Application` fluent bootstrap: `UseConfig`, `UseServer`, `UseServerSecurity`.
+  - Route registration: `RegisterGET`, `RegisterPOST`, `RegisterProtectedGET`.
+  - Runtime startup: `Run`, `RunListener`.
 
 Dependency direction is always inward:
 - Adapters depend on core contracts.
