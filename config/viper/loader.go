@@ -50,6 +50,8 @@ func Load(opts Options) (cfg config.Config, err error) {
 		return config.Config{}, &LoadError{Err: err}
 	}
 
+	applyLegacyKeyCompatibility(v)
+
 	var raw rawConfig
 	if err := v.Unmarshal(&raw); err != nil {
 		return config.Config{}, &DecodeError{Err: fmt.Errorf("unmarshal config: %w", err)}
@@ -97,7 +99,7 @@ func applyEnvironmentOverrides(v *viper.Viper, opts Options, snapshot map[string
 	setString("security.auth.jwt.issuer", binding("SECURITY_AUTH_JWT_ISSUER"))
 	setString("security.auth.cookie.name", binding("SECURITY_AUTH_COOKIE_NAME"))
 	setString("security.auth.cookie.domain", binding("SECURITY_AUTH_COOKIE_DOMAIN"))
-	setString("security.auth.cookie.sameSite", binding("SECURITY_AUTH_COOKIE_SAMESITE"))
+	setString("security.auth.cookie.same-site", binding("SECURITY_AUTH_COOKIE_SAMESITE"))
 	setString("security.auth.login.email", binding("SECURITY_AUTH_LOGIN_EMAIL"))
 
 	if value, ok := snapshot[binding("SERVER_PORT")]; ok {
@@ -113,7 +115,7 @@ func applyEnvironmentOverrides(v *viper.Viper, opts Options, snapshot map[string
 		if err != nil {
 			return fmt.Errorf("parse env %q as int: %w", binding("SECURITY_AUTH_JWT_TTLMINUTES"), err)
 		}
-		v.Set("security.auth.jwt.ttlMinutes", parsed)
+		v.Set("security.auth.jwt.ttl-minutes", parsed)
 	}
 
 	if value, ok := snapshot[binding("SECURITY_AUTH_COOKIE_SECURE")]; ok {
@@ -129,10 +131,91 @@ func applyEnvironmentOverrides(v *viper.Viper, opts Options, snapshot map[string
 		if err != nil {
 			return fmt.Errorf("parse env %q as bool: %w", binding("SECURITY_AUTH_COOKIE_HTTPONLY"), err)
 		}
-		v.Set("security.auth.cookie.httpOnly", parsed)
+		v.Set("security.auth.cookie.http-only", parsed)
 	}
 
 	return nil
+}
+
+func applyLegacyKeyCompatibility(v *viper.Viper) {
+	aliases := [][2]string{
+		{"security.auth.jwt.ttl-minutes", "security.auth.jwt.ttlMinutes"},
+		{"security.auth.cookie.http-only", "security.auth.cookie.httpOnly"},
+		{"security.auth.cookie.same-site", "security.auth.cookie.sameSite"},
+	}
+
+	for _, alias := range aliases {
+		canonical := alias[0]
+		legacy := alias[1]
+		if !v.IsSet(canonical) && v.IsSet(legacy) {
+			v.Set(canonical, v.Get(legacy))
+		}
+	}
+
+	providers, ok := providerSettings(v)
+	if !ok {
+		return
+	}
+
+	for providerKey := range providers {
+		applyProviderAlias(v, providerKey, "client-id", "clientID")
+		applyProviderAlias(v, providerKey, "client-secret", "clientSecret")
+		applyProviderAlias(v, providerKey, "auth-url", "authURL")
+		applyProviderAlias(v, providerKey, "token-url", "tokenURL")
+		applyProviderAlias(v, providerKey, "redirect-url", "redirectURL")
+	}
+}
+
+func providerSettings(v *viper.Viper) (map[string]any, bool) {
+	securityRaw, ok := v.AllSettings()["security"]
+	if !ok {
+		return nil, false
+	}
+
+	security, ok := securityRaw.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+
+	authRaw, ok := security["auth"]
+	if !ok {
+		return nil, false
+	}
+
+	auth, ok := authRaw.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+
+	oauth2Raw, ok := auth["oauth2"]
+	if !ok {
+		return nil, false
+	}
+
+	oauth2, ok := oauth2Raw.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+
+	providersRaw, ok := oauth2["providers"]
+	if !ok {
+		return nil, false
+	}
+
+	providers, ok := providersRaw.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+
+	return providers, true
+}
+
+func applyProviderAlias(v *viper.Viper, providerKey, canonicalKey, legacyKey string) {
+	canonicalPath := fmt.Sprintf("security.auth.oauth2.providers.%s.%s", providerKey, canonicalKey)
+	legacyPath := fmt.Sprintf("security.auth.oauth2.providers.%s.%s", providerKey, legacyKey)
+	if !v.IsSet(canonicalPath) && v.IsSet(legacyPath) {
+		v.Set(canonicalPath, v.Get(legacyPath))
+	}
 }
 
 func environmentSnapshot() map[string]string {

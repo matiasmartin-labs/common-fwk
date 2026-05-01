@@ -39,6 +39,10 @@ Follow these phases in order to avoid broken intermediate states.
 2. If file/env loading is needed, adopt `config/viper.Load(...)`.
 3. Keep validation centralized through `config.ValidateConfig` (directly or via adapter).
 
+Canonical file-config key style for `config/viper` is kebab-case (for example `ttl-minutes`,
+`http-only`, `same-site`, `client-id`, `client-secret`, `auth-url`, `token-url`, `redirect-url`).
+Legacy camelCase keys remain compatibility-only during migration and should be phased out.
+
 ### 2) Security validator wiring migration
 
 1. Build validator via `security/jwt.NewValidator(...)`.

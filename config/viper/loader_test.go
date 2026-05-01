@@ -22,23 +22,23 @@ security:
     jwt:
       secret: "secret"
       issuer: "common-fwk"
-      ttlMinutes: 15
+      ttl-minutes: 15
     cookie:
       name: "session"
       domain: "example.com"
       secure: true
-      httpOnly: true
-      sameSite: "Lax"
+      http-only: true
+      same-site: "Lax"
     login:
       email: "OWNER@Example.com"
     oauth2:
       providers:
         github:
-          clientID: "id"
-          clientSecret: "secret"
-          authURL: "https://github.com/login/oauth/authorize"
-          tokenURL: "https://github.com/login/oauth/access_token"
-          redirectURL: "https://app.example.com/auth/github/callback"
+          client-id: "id"
+          client-secret: "secret"
+          auth-url: "https://github.com/login/oauth/authorize"
+          token-url: "https://github.com/login/oauth/access_token"
+          redirect-url: "https://app.example.com/auth/github/callback"
           scopes: ["read:user", "user:email"]
 `)
 
@@ -131,13 +131,13 @@ security:
     jwt:
       secret: "file-secret"
       issuer: "common-fwk"
-      ttlMinutes: 15
+      ttl-minutes: 15
     cookie:
       name: "session"
       domain: "example.com"
       secure: true
-      httpOnly: true
-      sameSite: "Lax"
+      http-only: true
+      same-site: "Lax"
     login:
       email: "owner@example.com"
     oauth2:
@@ -175,13 +175,13 @@ security:
     jwt:
       secret: "secret"
       issuer: "common-fwk"
-      ttlMinutes: 15
+      ttl-minutes: 15
     cookie:
       name: "session"
       domain: "example.com"
       secure: true
-      httpOnly: true
-      sameSite: "Lax"
+      http-only: true
+      same-site: "Lax"
     login:
       email: "owner@example.com"
     oauth2:
@@ -230,13 +230,13 @@ security:
     jwt:
       secret: ""
       issuer: "common-fwk"
-      ttlMinutes: 15
+      ttl-minutes: 15
     cookie:
       name: "session"
       domain: "example.com"
       secure: true
-      httpOnly: true
-      sameSite: "Lax"
+      http-only: true
+      same-site: "Lax"
     login:
       email: "owner@example.com"
     oauth2:
@@ -264,6 +264,131 @@ security:
 	var coreValidation *config.ValidationError
 	if !errors.As(err, &coreValidation) {
 		t.Fatalf("expected core ValidationError to remain assertable")
+	}
+}
+
+func TestLoadLegacyCamelCaseCompatibility(t *testing.T) {
+	t.Parallel()
+
+	path := writeTestConfig(t, "legacy-camel-case.yaml", `
+server:
+  host: "127.0.0.1"
+  port: 8080
+security:
+  auth:
+    jwt:
+      secret: "secret"
+      issuer: "common-fwk"
+      ttlMinutes: 15
+    cookie:
+      name: "session"
+      domain: "example.com"
+      secure: true
+      httpOnly: true
+      sameSite: "Lax"
+    login:
+      email: "owner@example.com"
+    oauth2:
+      providers:
+        github:
+          clientID: "id"
+          clientSecret: "secret"
+          authURL: "https://github.com/login/oauth/authorize"
+          tokenURL: "https://github.com/login/oauth/access_token"
+          redirectURL: "https://app.example.com/auth/github/callback"
+          scopes: ["read:user", "user:email"]
+`)
+
+	cfg, err := Load(Options{ConfigPath: path})
+	if err != nil {
+		t.Fatalf("expected legacy camelCase keys to remain compatible, got error: %v", err)
+	}
+
+	provider := cfg.Security.Auth.OAuth2.Providers["github"]
+	if cfg.Security.Auth.JWT.TTLMinutes != 15 {
+		t.Fatalf("expected ttlMinutes compatibility mapping, got %d", cfg.Security.Auth.JWT.TTLMinutes)
+	}
+	if !cfg.Security.Auth.Cookie.HTTPOnly {
+		t.Fatalf("expected httpOnly compatibility mapping")
+	}
+	if cfg.Security.Auth.Cookie.SameSite != "Lax" {
+		t.Fatalf("expected sameSite compatibility mapping, got %q", cfg.Security.Auth.Cookie.SameSite)
+	}
+	if provider.ClientID != "id" {
+		t.Fatalf("expected provider clientID compatibility mapping, got %q", provider.ClientID)
+	}
+}
+
+func TestLoadCanonicalPrecedenceOverLegacyKeys(t *testing.T) {
+	t.Parallel()
+
+	path := writeTestConfig(t, "mixed-style.yaml", `
+server:
+  host: "127.0.0.1"
+  port: 8080
+security:
+  auth:
+    jwt:
+      secret: "secret"
+      issuer: "common-fwk"
+      ttl-minutes: 20
+      ttlMinutes: 10
+    cookie:
+      name: "session"
+      domain: "example.com"
+      secure: true
+      http-only: true
+      httpOnly: false
+      same-site: "Strict"
+      sameSite: "Lax"
+    login:
+      email: "owner@example.com"
+    oauth2:
+      providers:
+        github:
+          client-id: "canonical-id"
+          clientID: "legacy-id"
+          client-secret: "canonical-secret"
+          clientSecret: "legacy-secret"
+          auth-url: "https://canonical.example.com/auth"
+          authURL: "https://legacy.example.com/auth"
+          token-url: "https://canonical.example.com/token"
+          tokenURL: "https://legacy.example.com/token"
+          redirect-url: "https://canonical.example.com/callback"
+          redirectURL: "https://legacy.example.com/callback"
+          scopes: ["read:user"]
+`)
+
+	cfg, err := Load(Options{ConfigPath: path})
+	if err != nil {
+		t.Fatalf("expected mixed-style config to load, got error: %v", err)
+	}
+
+	provider := cfg.Security.Auth.OAuth2.Providers["github"]
+	if cfg.Security.Auth.JWT.TTLMinutes != 20 {
+		t.Fatalf("expected canonical ttl-minutes to win, got %d", cfg.Security.Auth.JWT.TTLMinutes)
+	}
+	if !cfg.Security.Auth.Cookie.HTTPOnly {
+		t.Fatalf("expected canonical http-only to win")
+	}
+	if cfg.Security.Auth.Cookie.SameSite != "Strict" {
+		t.Fatalf("expected canonical same-site to win, got %q", cfg.Security.Auth.Cookie.SameSite)
+	}
+
+	if provider.ClientID != "canonical-id" {
+		t.Fatalf("expected canonical client-id to win, got %q", provider.ClientID)
+	}
+	if provider.ClientSecret != "canonical-secret" {
+		t.Fatalf("expected canonical client-secret to win, got %q", provider.ClientSecret)
+	}
+	if provider.AuthURL != "https://canonical.example.com/auth" {
+		t.Fatalf("expected canonical auth-url to win, got %q", provider.AuthURL)
+	}
+	if provider.TokenURL != "https://canonical.example.com/token" {
+		t.Fatalf("expected canonical token-url to win, got %q", provider.TokenURL)
+	}
+	if provider.RedirectURL != "https://canonical.example.com/callback" {
+		t.Fatalf("expected canonical redirect-url to win, got %q", provider.RedirectURL)
 	}
 }
 
