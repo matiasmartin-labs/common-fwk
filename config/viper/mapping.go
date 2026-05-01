@@ -37,15 +37,15 @@ type rawLegacy struct{}
 type rawJWTConfig struct {
 	Secret     string `mapstructure:"secret"`
 	Issuer     string `mapstructure:"issuer"`
-	TTLMinutes int    `mapstructure:"ttlMinutes"`
+	TTLMinutes int    `mapstructure:"ttl-minutes"`
 }
 
 type rawCookieConfig struct {
 	Name     string `mapstructure:"name"`
 	Domain   string `mapstructure:"domain"`
 	Secure   bool   `mapstructure:"secure"`
-	HTTPOnly bool   `mapstructure:"httpOnly"`
-	SameSite string `mapstructure:"sameSite"`
+	HTTPOnly bool   `mapstructure:"http-only"`
+	SameSite string `mapstructure:"same-site"`
 }
 
 type rawLoginConfig struct {
@@ -57,11 +57,11 @@ type rawOAuth2Config struct {
 }
 
 type rawOAuth2ProviderConfig struct {
-	ClientID     string   `mapstructure:"clientID"`
-	ClientSecret string   `mapstructure:"clientSecret"`
-	AuthURL      string   `mapstructure:"authURL"`
-	TokenURL     string   `mapstructure:"tokenURL"`
-	RedirectURL  string   `mapstructure:"redirectURL"`
+	ClientID     string   `mapstructure:"client-id"`
+	ClientSecret string   `mapstructure:"client-secret"`
+	AuthURL      string   `mapstructure:"auth-url"`
+	TokenURL     string   `mapstructure:"token-url"`
+	RedirectURL  string   `mapstructure:"redirect-url"`
 	Scopes       []string `mapstructure:"scopes"`
 }
 

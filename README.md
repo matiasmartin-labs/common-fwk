@@ -110,6 +110,8 @@ Behavior notes:
 - `EnvOverride=true`: uses deterministic keys (example: `COMMON_FWK_SECURITY_AUTH_JWT_SECRET`).
 - `ExpandEnv=false`: `${VAR}` placeholders are preserved.
 - `ExpandEnv=true`: placeholders are expanded from a per-load env snapshot.
+- File-based adapter keys are documented in canonical kebab-case.
+- Legacy camelCase file keys remain temporarily compatible during migration.
 
 `./config/app.yaml` example:
 
@@ -122,23 +124,23 @@ security:
     jwt:
       secret: ${JWT_SECRET}
       issuer: common-fwk
-      ttlMinutes: 15
+      ttl-minutes: 15
     cookie:
       name: session
       domain: example.com
       secure: true
-      httpOnly: true
-      sameSite: Lax
+      http-only: true
+      same-site: Lax
     login:
       email: admin@example.com
     oauth2:
       providers:
         github:
-          clientID: ${GITHUB_CLIENT_ID}
-          clientSecret: ${GITHUB_CLIENT_SECRET}
-          authURL: https://github.com/login/oauth/authorize
-          tokenURL: https://github.com/login/oauth/access_token
-          redirectURL: https://app.example.com/auth/github/callback
+          client-id: ${GITHUB_CLIENT_ID}
+          client-secret: ${GITHUB_CLIENT_SECRET}
+          auth-url: https://github.com/login/oauth/authorize
+          token-url: https://github.com/login/oauth/access_token
+          redirect-url: https://app.example.com/auth/github/callback
           scopes: [read:user, user:email]
 ```
 
@@ -358,5 +360,7 @@ Dependency direction is always inward:
 
 ## Release and migration docs
 
+- Docs index: `docs/home.md`
+- Release checklist for `v0.2.0`: `docs/releases/v0.2.0-checklist.md`
 - Release checklist for `v0.1.0`: `docs/releases/v0.1.0-checklist.md`
 - Migration guide for `auth-provider-ms`: `docs/migration/auth-provider-ms-v0.1.0.md`
