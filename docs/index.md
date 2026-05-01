@@ -6,7 +6,7 @@ permalink: /
 
 # common-fwk Documentation
 
-`common-fwk` is a Go framework that provides reusable building blocks for microservices:
+`common-fwk` is a Go framework that provides reusable building blocks for microservices.
 config management, JWT security, HTTP middleware, structured logging, health endpoints, and
 a deterministic application bootstrap boundary.
 
