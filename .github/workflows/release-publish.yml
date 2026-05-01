@@ -26,17 +26,56 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t release_labels < <(
-            jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH" \
-              | grep -E '^release-type/(patch|minor|major)$' || true
+          mapfile -t all_labels < <(jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH")
+
+          if printf '%s\n' "${all_labels[@]}" | grep -qx 'release:skip'; then
+            echo "release:skip label found; skipping release publication."
+            echo "status=skipped" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Release Publish"
+              echo ""
+              echo "- Status: skipped"
+              echo "- Reason: label \`release:skip\` is present"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          mapfile -t release_labels_colon < <(
+            printf '%s\n' "${all_labels[@]}" | grep -E '^release-type:(patch|minor|major)$' || true
+          )
+          mapfile -t release_labels_slash < <(
+            printf '%s\n' "${all_labels[@]}" | grep -E '^release-type/(patch|minor|major)$' || true
           )
 
-          if [[ ${#release_labels[@]} -ne 1 ]]; then
-            echo "Expected exactly one release label (release-type/patch|minor|major); found ${#release_labels[@]}: ${release_labels[*]:-(none)}"
+          declare -A bump_seen=()
+          release_bumps=()
+
+          for label in "${release_labels_colon[@]}"; do
+            bump="${label#release-type:}"
+            if [[ -z "${bump_seen[$bump]+x}" ]]; then
+              bump_seen[$bump]=1
+              release_bumps+=("$bump")
+            fi
+          done
+
+          for label in "${release_labels_slash[@]}"; do
+            bump="${label#release-type/}"
+            if [[ -z "${bump_seen[$bump]+x}" ]]; then
+              bump_seen[$bump]=1
+              release_bumps+=("$bump")
+            fi
+          done
+
+          if [[ ${#release_bumps[@]} -ne 1 ]]; then
+            echo "Expected exactly one release label (release-type:patch|minor|major). Legacy slash labels are temporarily accepted. Found bumps ${#release_bumps[@]} from labels: ${release_labels_colon[*]:-(none)} ${release_labels_slash[*]:-(none)}"
             exit 1
           fi
 
-          bump_type="${release_labels[0]#release-type/}"
+          bump_type="${release_bumps[0]}"
+          legacy_mode="false"
+          if [[ ${#release_labels_colon[@]} -eq 0 && ${#release_labels_slash[@]} -gt 0 ]]; then
+            legacy_mode="true"
+          fi
 
           baseline="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
           if [[ -z "$baseline" ]]; then
@@ -65,6 +104,8 @@ jobs:
           echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
           echo "bump_type=$bump_type" >> "$GITHUB_OUTPUT"
           echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
+          echo "legacy_mode=$legacy_mode" >> "$GITHUB_OUTPUT"
+          echo "status=ready" >> "$GITHUB_OUTPUT"
 
           {
             echo "## Release Publish"
@@ -73,17 +114,26 @@ jobs:
             echo "- Bump type: \\`$bump_type\\`"
             echo "- Next version: \\`$next_version\\`"
             echo "- Target SHA: \\`${{ github.event.pull_request.merge_commit_sha }}\\`"
+            if [[ "$legacy_mode" == "true" ]]; then
+              echo "- Legacy label detected: yes (migrate to release-type:$bump_type)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create tag and GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_STATUS: ${{ steps.compute.outputs.status }}
           NEXT_VERSION: ${{ steps.compute.outputs.next_version }}
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         shell: bash
         run: |
           set -euo pipefail
+
+          if [[ "$RELEASE_STATUS" == "skipped" ]]; then
+            echo "Release creation skipped."
+            exit 0
+          fi
 
           if [[ -z "$NEXT_VERSION" ]]; then
             echo "Computed version is empty"

@@ -25,13 +25,49 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t release_labels < <(
-            jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH" \
-              | grep -E '^release-type/(patch|minor|major)$' || true
+          mapfile -t all_labels < <(jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH")
+
+          if printf '%s\n' "${all_labels[@]}" | grep -qx 'release:skip'; then
+            reason="Release preview skipped because label 'release:skip' is present."
+            echo "status=skipped" >> "$GITHUB_OUTPUT"
+            echo "reason=$reason" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Release Preview"
+              echo ""
+              echo "- Status: skipped"
+              echo "- Reason: $reason"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          mapfile -t release_labels_colon < <(
+            printf '%s\n' "${all_labels[@]}" | grep -E '^release-type:(patch|minor|major)$' || true
+          )
+          mapfile -t release_labels_slash < <(
+            printf '%s\n' "${all_labels[@]}" | grep -E '^release-type/(patch|minor|major)$' || true
           )
 
-          if [[ ${#release_labels[@]} -ne 1 ]]; then
-            reason="Expected exactly one release label (release-type/patch|minor|major); found ${#release_labels[@]}: ${release_labels[*]:-(none)}"
+          declare -A bump_seen=()
+          release_bumps=()
+
+          for label in "${release_labels_colon[@]}"; do
+            bump="${label#release-type:}"
+            if [[ -z "${bump_seen[$bump]+x}" ]]; then
+              bump_seen[$bump]=1
+              release_bumps+=("$bump")
+            fi
+          done
+
+          for label in "${release_labels_slash[@]}"; do
+            bump="${label#release-type/}"
+            if [[ -z "${bump_seen[$bump]+x}" ]]; then
+              bump_seen[$bump]=1
+              release_bumps+=("$bump")
+            fi
+          done
+
+          if [[ ${#release_bumps[@]} -ne 1 ]]; then
+            reason="Expected exactly one release label (release-type:patch|minor|major). Legacy slash labels are temporarily accepted. Found bumps ${#release_bumps[@]} from labels: ${release_labels_colon[*]:-(none)} ${release_labels_slash[*]:-(none)}"
             echo "status=blocked" >> "$GITHUB_OUTPUT"
             echo "reason=$reason" >> "$GITHUB_OUTPUT"
             {
@@ -42,7 +78,11 @@ jobs:
             exit 0
           fi
 
-          bump_type="${release_labels[0]#release-type/}"
+          bump_type="${release_bumps[0]}"
+          legacy_mode="false"
+          if [[ ${#release_labels_colon[@]} -eq 0 && ${#release_labels_slash[@]} -gt 0 ]]; then
+            legacy_mode="true"
+          fi
 
           baseline="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
           if [[ -z "$baseline" ]]; then
@@ -79,6 +119,7 @@ jobs:
           echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
           echo "bump_type=$bump_type" >> "$GITHUB_OUTPUT"
           echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
+          echo "legacy_mode=$legacy_mode" >> "$GITHUB_OUTPUT"
 
           {
             echo "## Release Preview"
@@ -86,6 +127,9 @@ jobs:
             echo "- Baseline: \\`$baseline\\`"
             echo "- Bump type: \\`$bump_type\\`"
             echo "- Next version: \\`$next_version\\`"
+            if [[ "$legacy_mode" == "true" ]]; then
+              echo "- Legacy label detected: yes (migrate to release-type:$bump_type)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upsert preview PR comment
@@ -96,6 +140,7 @@ jobs:
           PREVIEW_BASELINE: ${{ steps.compute.outputs.baseline }}
           PREVIEW_BUMP_TYPE: ${{ steps.compute.outputs.bump_type }}
           PREVIEW_NEXT_VERSION: ${{ steps.compute.outputs.next_version }}
+          PREVIEW_LEGACY_MODE: ${{ steps.compute.outputs.legacy_mode }}
         with:
           script: |
             const marker = '<!-- release-preview -->';
@@ -107,16 +152,31 @@ jobs:
             const baseline = process.env.PREVIEW_BASELINE || 'n/a';
             const bumpType = process.env.PREVIEW_BUMP_TYPE || 'n/a';
             const nextVersion = process.env.PREVIEW_NEXT_VERSION || 'n/a';
+            const legacyMode = process.env.PREVIEW_LEGACY_MODE === 'true';
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 
             let body;
             if (status === 'ready') {
-              body = [
+              const lines = [
                 marker,
                 '### Release Preview',
                 `- Baseline: \`${baseline}\``,
                 `- Bump type: \`${bumpType}\``,
                 `- Next version: **\`${nextVersion}\`**`,
+                '',
+                `[View workflow run](${runUrl})`,
+              ];
+              if (legacyMode) {
+                lines.splice(5, 0, ':warning: Legacy label `release-type/' + bumpType + '` detected. Migrate to `release-type:' + bumpType + '` to avoid future breakage.', '');
+              }
+              body = lines.join('\n');
+            } else if (status === 'skipped') {
+              body = [
+                marker,
+                '### Release Preview',
+                ':white_check_mark: Release skipped by `release:skip` label.',
+                '',
+                'Remove `release:skip` and add exactly one label `release-type:patch`, `release-type:minor`, or `release-type:major` when a release is needed.',
                 '',
                 `[View workflow run](${runUrl})`,
               ].join('\n');
@@ -126,7 +186,8 @@ jobs:
                 '### Release Preview',
                 `:warning: ${reason}`,
                 '',
-                'Add exactly one label: `release-type/patch`, `release-type/minor`, or `release-type/major`.',
+                'Add exactly one label: `release-type:patch`, `release-type:minor`, or `release-type:major`.',
+                'Legacy labels (`release-type/patch|minor|major`) remain temporarily supported during migration.',
                 '',
                 `[View workflow run](${runUrl})`,
               ].join('\n');
