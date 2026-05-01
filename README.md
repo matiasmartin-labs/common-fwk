@@ -615,6 +615,10 @@ Dependency direction is always inward:
 
 ## Release and migration docs
 
+- Release workflow label policy:
+  - Use exactly one of `release-type:patch`, `release-type:minor`, or `release-type:major` on release PRs.
+  - Use `release:skip` to explicitly skip release preview/publication for non-release changes (docs/chore-only PRs).
+  - Legacy labels (`release-type/patch`, `release-type/minor`, `release-type/major`) remain temporarily accepted for migration, but should be replaced.
 - Docs index: `docs/home.md`
 - Release checklist for `v0.2.0`: `docs/releases/v0.2.0-checklist.md`
 - Release checklist for `v0.1.0`: `docs/releases/v0.1.0-checklist.md`

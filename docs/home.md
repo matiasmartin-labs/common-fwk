@@ -7,6 +7,12 @@ This index groups the main project documentation pages.
 - `docs/releases/v0.2.0-checklist.md` — Release checklist and notes baseline for `v0.2.0`.
 - `docs/releases/v0.1.0-checklist.md` — Historical checklist used for `v0.1.0`.
 
+Release labeling policy:
+
+- Default labels: `release-type:patch`, `release-type:minor`, `release-type:major`.
+- Skip label: `release:skip` (release preview/publication intentionally skipped).
+- Migration note: legacy slash labels (`release-type/patch`, `release-type/minor`, `release-type/major`) are temporarily supported for compatibility and should be migrated to colon-based labels.
+
 ## Migration Guides
 
 - `docs/migration/auth-provider-ms-v0.1.0.md` — Migration steps from `auth-provider-ms/pkg` to `common-fwk`.
