@@ -1,3 +1,6 @@
+---
+nav_exclude: true
+---
 # common-fwk Docs Home
 
 > **Note**: This page is superseded by [`docs/index.md`](index.md) — the new consolidated documentation landing page.
