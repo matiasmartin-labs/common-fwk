@@ -40,3 +40,20 @@ server:
   write-timeout: 10s
   max-header-bytes: 1048576
 ```
+
+## App runtime accessor contract
+
+`app.Application` exposes read-only runtime accessors for config and security state:
+
+- `GetConfig() config.Config`
+- `GetSecurityValidator() security.Validator`
+- `IsSecurityReady() bool`
+
+Lifecycle semantics are explicit and deterministic:
+- Pre-init (`NewApplication()`): config accessor returns zero-value snapshot; security accessors return `nil` / `false`.
+- Partial-init (`UseConfig(...)` only): config accessor reflects configured runtime state; security accessors remain `nil` / `false`.
+- Post-init (security wiring success): security validator accessor is non-`nil` and `IsSecurityReady()` is `true`.
+
+Immutability guarantee:
+- `GetConfig()` returns a defensive snapshot with deep copies of mutable descendants (`OAuth2.Providers` and provider `Scopes`).
+- External mutations to returned values do not alter internal runtime state.

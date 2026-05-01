@@ -344,6 +344,38 @@ Behavior notes:
 - `RunListener(net.Listener)` is available for test-friendly startup flows.
 - `UseServerSecurityFromConfig()` is available as a thin convenience wrapper around config-driven JWT validator wiring (HS256/RS256).
 
+Read-only runtime accessors:
+
+```go
+fresh := app.NewApplication()
+
+// Explicit non-init behavior.
+_ = fresh.GetConfig()               // zero-value config snapshot
+_ = fresh.GetSecurityValidator()    // nil
+_ = fresh.IsSecurityReady()         // false
+
+a := app.NewApplication().
+	UseConfig(cfg).
+	UseServer()
+
+runtimeCfg := a.GetConfig()         // read-only snapshot
+_ = runtimeCfg.Security.Auth.OAuth2.Providers // safe to inspect
+
+// Mutating runtimeCfg does not mutate app internals.
+
+a = a.UseServerSecurity(validator)
+_ = a.GetSecurityValidator() != nil // true after security wiring
+_ = a.IsSecurityReady()             // true
+```
+
+Accessor lifecycle + immutability contract:
+- `GetConfig() config.Config`
+- `GetSecurityValidator() security.Validator`
+- `IsSecurityReady() bool`
+- `GetConfig()` is safe in all lifecycle stages and never triggers implicit bootstrap.
+- Before security wiring, `GetSecurityValidator()` returns `nil` and `IsSecurityReady()` returns `false`.
+- `GetConfig()` deep-copies mutable descendants (OAuth2 providers map and nested scopes slices) on each read.
+
 ---
 
 ## Layered architecture overview
