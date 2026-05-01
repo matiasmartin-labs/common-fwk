@@ -1,8 +1,14 @@
 package config
 
+import "time"
+
 const (
 	defaultServerHost = "127.0.0.1"
 	defaultServerPort = 8080
+
+	defaultServerReadTimeout    = 10 * time.Second
+	defaultServerWriteTimeout   = 10 * time.Second
+	defaultServerMaxHeaderBytes = 1 << 20
 
 	defaultJWTTTLMinutes = 60
 
@@ -19,7 +25,12 @@ func NewConfig(server ServerConfig, security SecurityConfig) Config {
 }
 
 // NewServerConfig returns a server config with useful defaults.
-func NewServerConfig(host string, port int) ServerConfig {
+func NewServerConfig(host string, port int, limits ...ServerRuntimeLimits) ServerConfig {
+	runtime := ServerRuntimeLimits{}
+	if len(limits) > 0 {
+		runtime = limits[0]
+	}
+
 	if host == "" {
 		host = defaultServerHost
 	}
@@ -28,9 +39,24 @@ func NewServerConfig(host string, port int) ServerConfig {
 		port = defaultServerPort
 	}
 
+	if runtime.ReadTimeout == 0 {
+		runtime.ReadTimeout = defaultServerReadTimeout
+	}
+
+	if runtime.WriteTimeout == 0 {
+		runtime.WriteTimeout = defaultServerWriteTimeout
+	}
+
+	if runtime.MaxHeaderBytes == 0 {
+		runtime.MaxHeaderBytes = defaultServerMaxHeaderBytes
+	}
+
 	return ServerConfig{
-		Host: host,
-		Port: port,
+		Host:           host,
+		Port:           port,
+		ReadTimeout:    runtime.ReadTimeout,
+		WriteTimeout:   runtime.WriteTimeout,
+		MaxHeaderBytes: runtime.MaxHeaderBytes,
 	}
 }
 

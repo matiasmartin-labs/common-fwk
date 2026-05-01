@@ -113,12 +113,23 @@ Behavior notes:
 - File-based adapter keys are documented in canonical kebab-case.
 - Legacy camelCase file keys remain temporarily compatible during migration.
 
+Server runtime limits (core + adapter):
+- File keys: `server.read-timeout`, `server.write-timeout`, `server.max-header-bytes`
+- Defaults: `10s`, `10s`, `1048576` (1 MiB)
+- Env override keys:
+  - `COMMON_FWK_SERVER_READ_TIMEOUT`
+  - `COMMON_FWK_SERVER_WRITE_TIMEOUT`
+  - `COMMON_FWK_SERVER_MAX_HEADER_BYTES`
+
 `./config/app.yaml` example:
 
 ```yaml
 server:
   host: 127.0.0.1
   port: 8080
+  read-timeout: 10s
+  write-timeout: 10s
+  max-header-bytes: 1048576
 security:
   auth:
     jwt:

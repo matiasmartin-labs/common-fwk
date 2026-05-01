@@ -36,7 +36,7 @@ func (f *fakeValidator) Validate(ctx context.Context, raw string) (claims.Claims
 
 func testConfig() config.Config {
 	return config.Config{
-		Server: config.ServerConfig{Host: "127.0.0.1", Port: 0},
+		Server: config.ServerConfig{Host: "127.0.0.1", Port: 0, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, MaxHeaderBytes: 1 << 20},
 	}
 }
 
@@ -61,6 +61,63 @@ func TestBootstrapChain_PreservesPointerAndReadiness(t *testing.T) {
 	}
 	if a.server.Handler == nil {
 		t.Fatalf("expected server handler wiring")
+	}
+	if a.server.ReadTimeout != 10*time.Second {
+		t.Fatalf("expected server read timeout to be wired, got %s", a.server.ReadTimeout)
+	}
+	if a.server.WriteTimeout != 10*time.Second {
+		t.Fatalf("expected server write timeout to be wired, got %s", a.server.WriteTimeout)
+	}
+	if a.server.MaxHeaderBytes != 1<<20 {
+		t.Fatalf("expected server max header bytes to be wired, got %d", a.server.MaxHeaderBytes)
+	}
+}
+
+func TestUseServer_WiresRuntimeLimitsFromConfig(t *testing.T) {
+	tests := []struct {
+		name             string
+		serverConfig     config.ServerConfig
+		wantReadTimeout  time.Duration
+		wantWriteTimeout time.Duration
+		wantHeaderBytes  int
+	}{
+		{
+			name: "explicit values",
+			serverConfig: config.ServerConfig{
+				Host:           "127.0.0.1",
+				Port:           8080,
+				ReadTimeout:    2 * time.Second,
+				WriteTimeout:   5 * time.Second,
+				MaxHeaderBytes: 4096,
+			},
+			wantReadTimeout:  2 * time.Second,
+			wantWriteTimeout: 5 * time.Second,
+			wantHeaderBytes:  4096,
+		},
+		{
+			name:             "defaults from constructor",
+			serverConfig:     config.NewServerConfig("127.0.0.1", 8080),
+			wantReadTimeout:  10 * time.Second,
+			wantWriteTimeout: 10 * time.Second,
+			wantHeaderBytes:  1 << 20,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			a := NewApplication().UseConfig(config.Config{Server: tc.serverConfig}).UseServer()
+
+			if a.server.ReadTimeout != tc.wantReadTimeout {
+				t.Fatalf("expected read timeout %s, got %s", tc.wantReadTimeout, a.server.ReadTimeout)
+			}
+			if a.server.WriteTimeout != tc.wantWriteTimeout {
+				t.Fatalf("expected write timeout %s, got %s", tc.wantWriteTimeout, a.server.WriteTimeout)
+			}
+			if a.server.MaxHeaderBytes != tc.wantHeaderBytes {
+				t.Fatalf("expected max header bytes %d, got %d", tc.wantHeaderBytes, a.server.MaxHeaderBytes)
+			}
+		})
 	}
 }
 

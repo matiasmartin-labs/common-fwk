@@ -53,6 +53,9 @@ func (a *Application) UseServer() *Application {
 	}
 
 	a.server.Handler = a.handler
+	a.server.ReadTimeout = a.cfg.Server.ReadTimeout
+	a.server.WriteTimeout = a.cfg.Server.WriteTimeout
+	a.server.MaxHeaderBytes = a.cfg.Server.MaxHeaderBytes
 	a.serverReady = true
 
 	return a

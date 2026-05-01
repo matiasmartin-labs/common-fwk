@@ -4,13 +4,14 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestMappingReturnsTypedErrorForInvalidProviderKey(t *testing.T) {
 	t.Parallel()
 
 	_, err := mapRawToCore(rawConfig{
-		Server: rawServerConfig{Host: "127.0.0.1", Port: 8080},
+		Server: rawServerConfig{Host: "127.0.0.1", Port: 8080, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, MaxHeaderBytes: 1024},
 		Security: rawSecurityConfig{Auth: rawAuthConfig{
 			JWT:    rawJWTConfig{Secret: "secret", Issuer: "issuer", TTLMinutes: 15},
 			Cookie: rawCookieConfig{Name: "session", SameSite: "Lax"},
@@ -48,7 +49,7 @@ func TestMappingDeterministicAndDefensiveCopies(t *testing.T) {
 	t.Parallel()
 
 	raw := rawConfig{
-		Server: rawServerConfig{Host: "127.0.0.1", Port: 8080},
+		Server: rawServerConfig{Host: "127.0.0.1", Port: 8080, ReadTimeout: 9 * time.Second, WriteTimeout: 11 * time.Second, MaxHeaderBytes: 2048},
 		Security: rawSecurityConfig{Auth: rawAuthConfig{
 			JWT:    rawJWTConfig{Secret: "secret", Issuer: "issuer", TTLMinutes: 15},
 			Cookie: rawCookieConfig{Name: "session", Domain: "example.com", Secure: true, HTTPOnly: true, SameSite: "Lax"},
@@ -78,6 +79,16 @@ func TestMappingDeterministicAndDefensiveCopies(t *testing.T) {
 
 	if !reflect.DeepEqual(first, second) {
 		t.Fatalf("expected deterministic mapping outputs")
+	}
+
+	if first.Server.ReadTimeout != 9*time.Second {
+		t.Fatalf("expected read timeout to be mapped, got %s", first.Server.ReadTimeout)
+	}
+	if first.Server.WriteTimeout != 11*time.Second {
+		t.Fatalf("expected write timeout to be mapped, got %s", first.Server.WriteTimeout)
+	}
+	if first.Server.MaxHeaderBytes != 2048 {
+		t.Fatalf("expected max header bytes to be mapped, got %d", first.Server.MaxHeaderBytes)
 	}
 
 	raw.Security.Auth.OAuth2.Providers["github"] = rawOAuth2ProviderConfig{}

@@ -49,6 +49,18 @@ func validateServer(cfg ServerConfig) error {
 		return invalidAt("server.port", fmt.Errorf("%w: must be between 1 and 65535", ErrOutOfRange))
 	}
 
+	if cfg.ReadTimeout <= 0 {
+		return invalidAt("server.readTimeout", fmt.Errorf("%w: must be positive", ErrOutOfRange))
+	}
+
+	if cfg.WriteTimeout <= 0 {
+		return invalidAt("server.writeTimeout", fmt.Errorf("%w: must be positive", ErrOutOfRange))
+	}
+
+	if cfg.MaxHeaderBytes <= 0 {
+		return invalidAt("server.maxHeaderBytes", fmt.Errorf("%w: must be positive", ErrOutOfRange))
+	}
+
 	return nil
 }
 
