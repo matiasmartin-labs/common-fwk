@@ -12,6 +12,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -42,6 +44,27 @@ func testConfig() config.Config {
 	return config.Config{
 		Server: config.ServerConfig{Host: "127.0.0.1", Port: 0, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, MaxHeaderBytes: 1 << 20},
 	}
+}
+
+func testConfigWithOAuth2Provider() config.Config {
+	return config.NewConfig(
+		config.NewServerConfig("127.0.0.1", 8080),
+		config.NewSecurityConfig(config.NewAuthConfig(
+			config.NewJWTConfig("secret", "common-fwk", 15),
+			config.NewCookieConfig("session", "example.com", true, true, "Lax"),
+			config.NewLoginConfig("owner@example.com"),
+			config.NewOAuth2Config(map[string]config.OAuth2ProviderConfig{
+				"github": config.NewOAuth2ProviderConfig(
+					"client-id",
+					"client-secret",
+					"https://github.com/login/oauth/authorize",
+					"https://github.com/login/oauth/access_token",
+					"https://app.example.com/auth/github/callback",
+					[]string{"read:user", "user:email"},
+				),
+			}),
+		)),
+	)
 }
 
 func TestBootstrapChain_PreservesPointerAndReadiness(t *testing.T) {
@@ -432,6 +455,238 @@ func TestUseServerSecurityFromConfig(t *testing.T) {
 			t.Fatalf("expected validator to remain nil on failure")
 		}
 	})
+}
+
+func TestAccessors_LifecycleMatrix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		bootstrap      func(*Application)
+		wantConfig     config.Config
+		wantValidator  bool
+		wantSecReady   bool
+	}{
+		{
+			name:          "pre-init returns explicit non-ready values",
+			bootstrap:     func(_ *Application) {},
+			wantConfig:    config.Config{},
+			wantValidator: false,
+			wantSecReady:  false,
+		},
+		{
+			name: "partial-init after UseConfig exposes only config",
+			bootstrap: func(a *Application) {
+				a.UseConfig(testConfigWithOAuth2Provider())
+			},
+			wantConfig:     testConfigWithOAuth2Provider(),
+			wantValidator:  false,
+			wantSecReady:   false,
+		},
+		{
+			name: "post-init with direct validator exposes both config and security",
+			bootstrap: func(a *Application) {
+				a.UseConfig(testConfigWithOAuth2Provider()).UseServerSecurity(&fakeValidator{})
+			},
+			wantConfig:     testConfigWithOAuth2Provider(),
+			wantValidator:  true,
+			wantSecReady:   true,
+		},
+		{
+			name: "post-init with config-driven security exposes both config and security",
+			bootstrap: func(a *Application) {
+				a.UseConfig(testConfigWithOAuth2Provider())
+				_, err := a.UseServerSecurityFromConfig()
+				if err != nil {
+					t.Fatalf("expected config-driven security wiring success, got %v", err)
+				}
+			},
+			wantConfig:     testConfigWithOAuth2Provider(),
+			wantValidator:  true,
+			wantSecReady:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			a := NewApplication()
+			tc.bootstrap(a)
+
+			var gotCfg config.Config
+			var gotValidator any
+			var gotReady bool
+
+			mustNotPanic(t, "GetConfig", func() {
+				gotCfg = a.GetConfig()
+			})
+			mustNotPanic(t, "GetSecurityValidator", func() {
+				gotValidator = a.GetSecurityValidator()
+			})
+			mustNotPanic(t, "IsSecurityReady", func() {
+				gotReady = a.IsSecurityReady()
+			})
+
+			if !reflect.DeepEqual(gotCfg, tc.wantConfig) {
+				t.Fatalf("unexpected config snapshot\nwant=%#v\ngot =%#v", tc.wantConfig, gotCfg)
+			}
+			if (gotValidator != nil) != tc.wantValidator {
+				t.Fatalf("unexpected validator presence: want=%t got=%t", tc.wantValidator, gotValidator != nil)
+			}
+			if gotReady != tc.wantSecReady {
+				t.Fatalf("unexpected security readiness: want=%t got=%t", tc.wantSecReady, gotReady)
+			}
+		})
+	}
+}
+
+func TestGetConfig_DefensiveSnapshotImmutability(t *testing.T) {
+	t.Parallel()
+
+	a := NewApplication().UseConfig(testConfigWithOAuth2Provider())
+
+	firstSnapshot := a.GetConfig()
+	if firstSnapshot.Security.Auth.OAuth2.Providers == nil {
+		t.Fatalf("expected providers map in snapshot")
+	}
+
+	provider, ok := firstSnapshot.Security.Auth.OAuth2.Providers["github"]
+	if !ok {
+		t.Fatalf("expected github provider in snapshot")
+	}
+
+	provider.Scopes[0] = "mutated-scope"
+	firstSnapshot.Security.Auth.OAuth2.Providers["github"] = provider
+	firstSnapshot.Security.Auth.OAuth2.Providers["evil"] = config.NewOAuth2ProviderConfig(
+		"x",
+		"y",
+		"https://example.com/auth",
+		"https://example.com/token",
+		"https://example.com/callback",
+		[]string{"scope"},
+	)
+
+	secondSnapshot := a.GetConfig()
+	provider2, ok := secondSnapshot.Security.Auth.OAuth2.Providers["github"]
+	if !ok {
+		t.Fatalf("expected github provider in second snapshot")
+	}
+
+	if provider2.Scopes[0] != "read:user" {
+		t.Fatalf("expected internal scopes to remain unchanged, got %q", provider2.Scopes[0])
+	}
+	if _, exists := secondSnapshot.Security.Auth.OAuth2.Providers["evil"]; exists {
+		t.Fatalf("expected injected provider key to not leak into internal runtime state")
+	}
+
+	thirdSnapshot := a.GetConfig()
+	secondProvider := secondSnapshot.Security.Auth.OAuth2.Providers["github"]
+	thirdProvider := thirdSnapshot.Security.Auth.OAuth2.Providers["github"]
+	if &secondProvider.Scopes[0] == &thirdProvider.Scopes[0] {
+		t.Fatalf("expected scope slices to be independently copied per read")
+	}
+}
+
+func TestAccessors_FailedConfigDrivenSecurityRemainsUnavailable(t *testing.T) {
+	t.Parallel()
+
+	a := NewApplication().UseConfig(config.Config{
+		Server: config.NewServerConfig("127.0.0.1", 8080),
+		Security: config.NewSecurityConfig(config.NewAuthConfig(
+			config.JWTConfig{Algorithm: config.JWTAlgorithmRS256, Issuer: "common-fwk", TTLMinutes: 15},
+			config.NewCookieConfig("session", "example.com", true, true, "Lax"),
+			config.NewLoginConfig("owner@example.com"),
+			config.NewOAuth2Config(nil),
+		)),
+	})
+
+	_, err := a.UseServerSecurityFromConfig()
+	if err == nil {
+		t.Fatalf("expected config-driven security wiring error")
+	}
+
+	if a.GetSecurityValidator() != nil {
+		t.Fatalf("expected accessor validator to remain nil after failed wiring")
+	}
+	if a.IsSecurityReady() {
+		t.Fatalf("expected accessor security readiness to remain false after failed wiring")
+	}
+}
+
+func TestDocumentation_AccessorContractSynchronization(t *testing.T) {
+	t.Parallel()
+
+	type docSpec struct {
+		name string
+		path string
+	}
+
+	docs := []docSpec{
+		{name: "package docs", path: "doc.go"},
+		{name: "readme", path: "../README.md"},
+		{name: "docs home", path: "../docs/home.md"},
+	}
+
+	sharedSignatures := []string{
+		"GetConfig() config.Config",
+		"GetSecurityValidator() security.Validator",
+		"IsSecurityReady() bool",
+	}
+
+	for _, doc := range docs {
+		doc := doc
+		t.Run(doc.name, func(t *testing.T) {
+			raw, err := os.ReadFile(doc.path)
+			if err != nil {
+				t.Fatalf("read %s (%s): %v", doc.name, doc.path, err)
+			}
+
+			text := string(raw)
+			lower := strings.ToLower(text)
+
+			for _, signature := range sharedSignatures {
+				if !strings.Contains(text, signature) {
+					t.Fatalf("%s must include accessor signature %q", doc.name, signature)
+				}
+			}
+
+			if !(strings.Contains(lower, "pre-init") || strings.Contains(lower, "non-init")) {
+				t.Fatalf("%s must describe pre-init/non-init accessor behavior", doc.name)
+			}
+			if !strings.Contains(lower, "zero-value") || !strings.Contains(lower, "nil") || !strings.Contains(lower, "false") {
+				t.Fatalf("%s must document pre-init expectations (zero-value config, nil validator, false readiness)", doc.name)
+			}
+
+			if !(strings.Contains(lower, "post-init") || strings.Contains(lower, "after security wiring")) {
+				t.Fatalf("%s must describe post-init accessor behavior", doc.name)
+			}
+			if !strings.Contains(lower, "true") {
+				t.Fatalf("%s must document ready/true post-init expectations", doc.name)
+			}
+
+			hasImmutabilityWording := strings.Contains(lower, "defensive snapshot") || strings.Contains(lower, "deep-cop")
+			if !hasImmutabilityWording {
+				t.Fatalf("%s must document defensive snapshot/deep-copy immutability", doc.name)
+			}
+
+			hasMutationSafetyWording := strings.Contains(lower, "internal runtime state") || strings.Contains(lower, "app internals")
+			if !hasMutationSafetyWording {
+				t.Fatalf("%s must document that external mutation does not affect internals", doc.name)
+			}
+		})
+	}
+}
+
+func mustNotPanic(t *testing.T, name string, fn func()) {
+	t.Helper()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("%s panicked: %v", name, r)
+		}
+	}()
+
+	fn()
 }
 
 func waitHTTPGet(url string, timeout time.Duration) (*http.Response, error) {

@@ -33,6 +33,21 @@ type Application struct {
 	securityReady bool
 }
 
+// GetConfig returns a read-only snapshot of the current runtime config.
+func (a *Application) GetConfig() config.Config {
+	return cloneConfig(a.cfg)
+}
+
+// GetSecurityValidator returns the current security validator when wired.
+func (a *Application) GetSecurityValidator() security.Validator {
+	return a.validator
+}
+
+// IsSecurityReady reports whether security runtime was fully wired.
+func (a *Application) IsSecurityReady() bool {
+	return a.securityReady
+}
+
 // NewApplication creates a bootstrap instance with safe defaults.
 func NewApplication() *Application {
 	h := gin.New()
@@ -46,6 +61,37 @@ func NewApplication() *Application {
 func (a *Application) UseConfig(cfg config.Config) *Application {
 	a.cfg = cfg
 	return a
+}
+
+func cloneConfig(cfg config.Config) config.Config {
+	cfg.Security.Auth.OAuth2.Providers = cloneOAuth2Providers(cfg.Security.Auth.OAuth2.Providers)
+
+	return cfg
+}
+
+func cloneOAuth2Providers(providers map[string]config.OAuth2ProviderConfig) map[string]config.OAuth2ProviderConfig {
+	if providers == nil {
+		return nil
+	}
+
+	cloned := make(map[string]config.OAuth2ProviderConfig, len(providers))
+	for key, provider := range providers {
+		provider.Scopes = cloneStringSlice(provider.Scopes)
+		cloned[key] = provider
+	}
+
+	return cloned
+}
+
+func cloneStringSlice(values []string) []string {
+	if values == nil {
+		return nil
+	}
+
+	cloned := make([]string, len(values))
+	copy(cloned, values)
+
+	return cloned
 }
 
 // UseServer wires the HTTP server and marks server readiness.
