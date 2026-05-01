@@ -1,5 +1,10 @@
 # common-fwk Docs Home
 
+> **Note**: This page is superseded by [`docs/index.md`](index.md) — the new consolidated documentation landing page.
+> It is kept for historical reference only. New documentation is organized under the sections below.
+
+---
+
 This index groups the main project documentation pages.
 
 ## Releases

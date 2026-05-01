@@ -1,0 +1,56 @@
+theme: just-the-docs
+
+title: common-fwk
+description: >
+  A Go framework providing reusable building blocks for microservices:
+  config, security, HTTP middleware, app bootstrap, logging, and more.
+
+baseurl: ""
+url: "https://matiasmartin-labs.github.io/common-fwk"
+
+# Navigation and search
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+
+# Aux links (top-right)
+aux_links:
+  "GitHub":
+    - "https://github.com/matiasmartin-labs/common-fwk"
+
+aux_links_new_tab: true
+
+# Footer
+footer_content: "common-fwk — MIT License"
+
+# Collections
+collections:
+  docs:
+    permalink: "/:collection/:path/"
+    output: true
+
+# Back to top
+back_to_top: true
+back_to_top_text: "Back to top"
+
+# Last edit timestamp
+last_edit_time_stamp: false
+
+# Callouts
+callouts_level: quiet
+callouts:
+  highlight:
+    color: yellow
+  important:
+    title: Important
+    color: blue
+  new:
+    title: New
+    color: green
+  note:
+    title: Note
+    color: purple
+  warning:
+    title: Warning
+    color: red
