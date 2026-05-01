@@ -344,6 +344,112 @@ Behavior notes:
 - `RunListener(net.Listener)` is available for test-friendly startup flows.
 - `UseServerSecurityFromConfig()` is available as a thin convenience wrapper around config-driven JWT validator wiring (HS256/RS256).
 
+Health/readiness preset API (explicit opt-in):
+
+- `EnableHealthReadinessPresets(opts HealthReadinessOptions) error`
+
+```go
+package main
+
+import (
+	"errors"
+	"log"
+
+	"github.com/matiasmartin-labs/common-fwk/app"
+	"github.com/matiasmartin-labs/common-fwk/config"
+)
+
+func main() {
+	a := app.NewApplication().
+		UseConfig(config.NewConfig(
+			config.NewServerConfig("127.0.0.1", 8080),
+			config.NewSecurityConfig(config.NewAuthConfig(
+				config.NewJWTConfig("secret", "common-fwk", 15),
+				config.NewCookieConfig("session", "example.com", true, true, "Lax"),
+				config.NewLoginConfig("admin@example.com"),
+				config.NewOAuth2Config(nil),
+			)),
+		)).
+		UseServer()
+
+	if err := a.EnableHealthReadinessPresets(app.HealthReadinessOptions{}); err != nil {
+		if errors.Is(err, app.ErrServerNotReady) {
+			log.Fatal("server bootstrap incomplete")
+		}
+		log.Fatal(err)
+	}
+
+	if err := a.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+Custom paths + synchronous checks:
+
+```go
+package main
+
+import (
+	"errors"
+	"log"
+
+	"github.com/matiasmartin-labs/common-fwk/app"
+	"github.com/matiasmartin-labs/common-fwk/config"
+)
+
+func main() {
+	a := app.NewApplication().
+		UseConfig(config.NewConfig(
+			config.NewServerConfig("127.0.0.1", 8080),
+			config.NewSecurityConfig(config.NewAuthConfig(
+				config.NewJWTConfig("secret", "common-fwk", 15),
+				config.NewCookieConfig("session", "example.com", true, true, "Lax"),
+				config.NewLoginConfig("admin@example.com"),
+				config.NewOAuth2Config(nil),
+			)),
+		)).
+		UseServer()
+
+	err := a.EnableHealthReadinessPresets(app.HealthReadinessOptions{
+		HealthPath: "/livez",
+		ReadyPath:  "/readyz/internal",
+		Checks: []app.ReadinessCheck{
+			func() error { return nil },
+			func() error {
+				if false {
+					return errors.New("dependency not ready")
+				}
+				return nil
+			},
+		},
+	})
+	if err != nil {
+		if errors.Is(err, app.ErrRouteConflict) {
+			log.Fatal("preset route conflicts with existing GET route")
+		}
+		if errors.Is(err, app.ErrInvalidPresetOptions) {
+			log.Fatal("invalid health/readiness options")
+		}
+		log.Fatal(err)
+	}
+
+	if err := a.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+Readiness semantics:
+- `/healthz` (or custom `HealthPath`) always returns `200` once presets are enabled.
+- `/readyz` (or custom `ReadyPath`) returns `200` only when bootstrap invariants and all checks pass.
+- Readiness returns `503` when invariants are unmet or any check fails.
+- Presets are never auto-registered by `UseServer()`; default paths are not duplicated when custom paths are configured.
+
+Health/readiness non-goals:
+- No implicit preset registration during bootstrap.
+- No provider-specific probing in framework internals; dependency readiness checks are caller-provided.
+
 Read-only runtime accessors:
 
 ```go

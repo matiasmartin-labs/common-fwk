@@ -16,12 +16,39 @@ import (
 )
 
 var (
-	ErrServerNotReady   = errors.New("server not ready")
-	ErrSecurityNotReady = errors.New("security not ready")
-	ErrInvalidPath      = errors.New("invalid path")
-	ErrNilHandler       = errors.New("nil handler")
-	ErrNilListener      = errors.New("nil listener")
+	ErrServerNotReady       = errors.New("server not ready")
+	ErrSecurityNotReady     = errors.New("security not ready")
+	ErrInvalidPath          = errors.New("invalid path")
+	ErrNilHandler           = errors.New("nil handler")
+	ErrNilListener          = errors.New("nil listener")
+	ErrRouteConflict        = errors.New("route conflict")
+	ErrInvalidPresetOptions = errors.New("invalid preset options")
 )
+
+const (
+	defaultHealthPath = "/healthz"
+	defaultReadyPath  = "/readyz"
+)
+
+// ReadinessCheck is a synchronous readiness probe.
+//
+// Returning nil means the check passed. Returning an error marks the
+// application as not-ready for the current request.
+type ReadinessCheck func() error
+
+// HealthReadinessOptions configures health/readiness preset registration.
+type HealthReadinessOptions struct {
+	// HealthPath overrides the health endpoint path.
+	//
+	// Defaults to "/healthz" when omitted.
+	HealthPath string
+	// ReadyPath overrides the readiness endpoint path.
+	//
+	// Defaults to "/readyz" when omitted.
+	ReadyPath string
+	// Checks are evaluated synchronously in order for each readiness request.
+	Checks []ReadinessCheck
+}
 
 // Application is an instance-scoped bootstrap container.
 type Application struct {
@@ -166,6 +193,110 @@ func validateHandler(h gin.HandlerFunc) error {
 	if h == nil {
 		return ErrNilHandler
 	}
+
+	return nil
+}
+
+func resolveHealthReadinessOptions(opts HealthReadinessOptions) (HealthReadinessOptions, error) {
+	resolved := HealthReadinessOptions{
+		HealthPath: defaultHealthPath,
+		ReadyPath:  defaultReadyPath,
+		Checks:     opts.Checks,
+	}
+
+	if opts.HealthPath != "" {
+		if strings.TrimSpace(opts.HealthPath) == "" {
+			return HealthReadinessOptions{}, fmt.Errorf("health path is blank: %w", ErrInvalidPresetOptions)
+		}
+		resolved.HealthPath = opts.HealthPath
+	}
+
+	if opts.ReadyPath != "" {
+		if strings.TrimSpace(opts.ReadyPath) == "" {
+			return HealthReadinessOptions{}, fmt.Errorf("ready path is blank: %w", ErrInvalidPresetOptions)
+		}
+		resolved.ReadyPath = opts.ReadyPath
+	}
+
+	if resolved.HealthPath == resolved.ReadyPath {
+		return HealthReadinessOptions{}, fmt.Errorf(
+			"health and readiness paths must differ: %w",
+			ErrInvalidPresetOptions,
+		)
+	}
+
+	return resolved, nil
+}
+
+func hasGETRoute(routes gin.RoutesInfo, path string) bool {
+	for _, route := range routes {
+		if route.Method == http.MethodGet && route.Path == path {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (a *Application) ensureNoPresetRouteConflict(paths ...string) error {
+	routes := a.handler.Routes()
+	for _, path := range paths {
+		if hasGETRoute(routes, path) {
+			return fmt.Errorf("method=%s path=%q: %w", http.MethodGet, path, ErrRouteConflict)
+		}
+	}
+
+	return nil
+}
+
+func (a *Application) readinessInvariantSatisfied() bool {
+	return a.serverReady && a.handler != nil && a.server.Handler != nil
+}
+
+func (a *Application) readinessStatus(checks []ReadinessCheck) int {
+	if !a.readinessInvariantSatisfied() {
+		return http.StatusServiceUnavailable
+	}
+
+	for _, check := range checks {
+		if check == nil {
+			return http.StatusServiceUnavailable
+		}
+
+		if err := check(); err != nil {
+			return http.StatusServiceUnavailable
+		}
+	}
+
+	return http.StatusOK
+}
+
+// EnableHealthReadinessPresets registers health/readiness handlers explicitly.
+//
+// The method is opt-in and never runs implicitly from UseServer. It requires a
+// ready server bootstrap and fails when requested paths are invalid or conflict
+// with already registered GET routes.
+func (a *Application) EnableHealthReadinessPresets(opts HealthReadinessOptions) error {
+	if err := a.ensureServerReady(); err != nil {
+		return err
+	}
+
+	resolvedOpts, err := resolveHealthReadinessOptions(opts)
+	if err != nil {
+		return err
+	}
+
+	if err := a.ensureNoPresetRouteConflict(resolvedOpts.HealthPath, resolvedOpts.ReadyPath); err != nil {
+		return err
+	}
+
+	a.handler.GET(resolvedOpts.HealthPath, func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	a.handler.GET(resolvedOpts.ReadyPath, func(c *gin.Context) {
+		c.Status(a.readinessStatus(resolvedOpts.Checks))
+	})
 
 	return nil
 }

@@ -57,3 +57,24 @@ Lifecycle semantics are explicit and deterministic:
 Immutability guarantee:
 - `GetConfig()` returns a defensive snapshot with deep copies of mutable descendants (`OAuth2.Providers` and provider `Scopes`).
 - External mutations to returned values do not alter internal runtime state.
+
+## Health/readiness preset operational behavior
+
+`app.Application` exposes explicit opt-in preset registration via:
+
+- `EnableHealthReadinessPresets(opts HealthReadinessOptions) error`
+
+Contract summary:
+- Default paths are `/healthz` and `/readyz` when overrides are not provided.
+- Custom paths are honored per endpoint (`HealthPath`, `ReadyPath`) with no implicit duplication of defaults.
+- Health endpoint returns `200` once presets are enabled.
+- Readiness endpoint returns `200` only when bootstrap invariants pass and all readiness checks return `nil`; otherwise `503`.
+
+Ordering and conflict behavior:
+- Calling preset registration before `UseServer()` returns `ErrServerNotReady`.
+- Blank paths or duplicated health/ready path values return `ErrInvalidPresetOptions`.
+- Conflicts with already registered GET routes return `ErrRouteConflict` and no partial preset registration is applied.
+
+Non-goals:
+- No implicit health/readiness route registration during bootstrap (`UseServer()` remains side-effect free for presets).
+- No provider-specific probing in framework internals; dependency readiness checks are caller-provided.
