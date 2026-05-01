@@ -162,6 +162,39 @@ func TestNewConfigIsDeterministicAndCopiesDependencies(t *testing.T) {
 	if first.Security.Auth.OAuth2.Providers["google"].ClientID != "id" {
 		t.Fatalf("expected provider map to be copied defensively")
 	}
+
+	if !first.Logging.Enabled {
+		t.Fatalf("expected logging enabled default to be true")
+	}
+	if first.Logging.Level != defaultLoggingLevel {
+		t.Fatalf("expected default logging level %q, got %q", defaultLoggingLevel, first.Logging.Level)
+	}
+	if first.Logging.Format != defaultLoggingFormat {
+		t.Fatalf("expected default logging format %q, got %q", defaultLoggingFormat, first.Logging.Format)
+	}
+}
+
+func TestNewLoggingConfigDefaultsAndDefensiveCopy(t *testing.T) {
+	t.Parallel()
+
+	enabled := true
+	input := map[string]LoggerOverrideConfig{
+		"auth": {Enabled: &enabled, Level: "warn"},
+	}
+
+	loggingCfg := NewLoggingConfig(true, "", "", input)
+
+	if loggingCfg.Level != defaultLoggingLevel {
+		t.Fatalf("expected default level %q, got %q", defaultLoggingLevel, loggingCfg.Level)
+	}
+	if loggingCfg.Format != defaultLoggingFormat {
+		t.Fatalf("expected default format %q, got %q", defaultLoggingFormat, loggingCfg.Format)
+	}
+
+	input["auth"] = LoggerOverrideConfig{Level: "error"}
+	if loggingCfg.Loggers["auth"].Level != "warn" {
+		t.Fatalf("expected logger overrides map to be copied defensively")
+	}
 }
 
 func TestNewOAuth2ProviderConfigCopiesScopes(t *testing.T) {

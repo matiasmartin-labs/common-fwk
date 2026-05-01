@@ -20,6 +20,21 @@ const (
 type Config struct {
 	Server   ServerConfig
 	Security SecurityConfig
+	Logging  LoggingConfig
+}
+
+// LoggingConfig contains framework logging defaults and per-logger overrides.
+type LoggingConfig struct {
+	Enabled bool
+	Level   string
+	Format  string
+	Loggers map[string]LoggerOverrideConfig
+}
+
+// LoggerOverrideConfig contains per-logger enabled/level overrides.
+type LoggerOverrideConfig struct {
+	Enabled *bool
+	Level   string
 }
 
 // ServerConfig contains HTTP server settings.

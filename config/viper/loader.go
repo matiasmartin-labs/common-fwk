@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -107,6 +108,16 @@ func applyEnvironmentOverrides(v *viper.Viper, opts Options, snapshot map[string
 	setString("security.auth.cookie.domain", binding("SECURITY_AUTH_COOKIE_DOMAIN"))
 	setString("security.auth.cookie.same-site", binding("SECURITY_AUTH_COOKIE_SAMESITE"))
 	setString("security.auth.login.email", binding("SECURITY_AUTH_LOGIN_EMAIL"))
+	setString("logging.level", binding("LOGGING_LEVEL"))
+	setString("logging.format", binding("LOGGING_FORMAT"))
+
+	if value, ok := snapshot[binding("LOGGING_ENABLED")]; ok {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err != nil {
+			return fmt.Errorf("parse env %q as bool: %w", binding("LOGGING_ENABLED"), err)
+		}
+		v.Set("logging.enabled", parsed)
+	}
 
 	if value, ok := snapshot[binding("SERVER_PORT")]; ok {
 		parsed, err := strconv.Atoi(strings.TrimSpace(value))
@@ -162,6 +173,52 @@ func applyEnvironmentOverrides(v *viper.Viper, opts Options, snapshot map[string
 			return fmt.Errorf("parse env %q as bool: %w", binding("SECURITY_AUTH_COOKIE_HTTPONLY"), err)
 		}
 		v.Set("security.auth.cookie.http-only", parsed)
+	}
+
+	const loggerLevelSuffix = "_LEVEL"
+	const loggerEnabledSuffix = "_ENABLED"
+	loggerPrefix := binding("LOGGING_LOGGERS_")
+
+	loggerKeys := make([]string, 0, len(snapshot))
+	for key := range snapshot {
+		if strings.HasPrefix(key, loggerPrefix) {
+			loggerKeys = append(loggerKeys, key)
+		}
+	}
+	sort.Strings(loggerKeys)
+
+	for _, envKey := range loggerKeys {
+		suffix := strings.TrimPrefix(envKey, loggerPrefix)
+		if suffix == "" {
+			continue
+		}
+
+		if strings.HasSuffix(suffix, loggerLevelSuffix) {
+			namePart := strings.TrimSuffix(suffix, loggerLevelSuffix)
+			namePart = strings.ToLower(strings.TrimSpace(namePart))
+			if namePart == "" {
+				continue
+			}
+			namePart = strings.ReplaceAll(namePart, "__", "-")
+			v.Set(fmt.Sprintf("logging.loggers.%s.level", namePart), snapshot[envKey])
+			continue
+		}
+
+		if strings.HasSuffix(suffix, loggerEnabledSuffix) {
+			namePart := strings.TrimSuffix(suffix, loggerEnabledSuffix)
+			namePart = strings.ToLower(strings.TrimSpace(namePart))
+			if namePart == "" {
+				continue
+			}
+			namePart = strings.ReplaceAll(namePart, "__", "-")
+
+			parsed, err := strconv.ParseBool(strings.TrimSpace(snapshot[envKey]))
+			if err != nil {
+				return fmt.Errorf("parse env %q as bool: %w", envKey, err)
+			}
+
+			v.Set(fmt.Sprintf("logging.loggers.%s.enabled", namePart), parsed)
+		}
 	}
 
 	return nil

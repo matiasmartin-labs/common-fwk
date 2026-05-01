@@ -482,6 +482,84 @@ Accessor lifecycle + immutability contract:
 - Before security wiring, `GetSecurityValidator()` returns `nil` and `IsSecurityReady()` returns `false`.
 - `GetConfig()` deep-copies mutable descendants (OAuth2 providers map and nested scopes slices) on each read.
 
+### 6) Named logger registry (`GetLogger`) and logging config
+
+`app.Application` exposes deterministic named logger access:
+
+- `GetLogger(name string) (logging.Logger, error)`
+
+Lifecycle contract:
+- Calling `GetLogger("auth")` before `UseConfig(...)` returns `ErrLoggingNotReady`.
+- Calling `GetLogger("")` returns `ErrLoggerNameRequired`.
+- Repeated `GetLogger("auth")` calls on the same `Application` return the same logger instance.
+- Same logger name across different `Application` instances is isolated (different instances).
+
+Core logging config keys:
+
+- `logging.enabled` (default `true`)
+- `logging.level` (default `info`) — accepted: `debug|info|warn|error`
+- `logging.format` (default `json`) — accepted: `json|text`
+- `logging.loggers.<name>.enabled` (optional override)
+- `logging.loggers.<name>.level` (optional override)
+
+Deterministic precedence matrix:
+
+| Setting | Effective value |
+|---|---|
+| `enabled` | per-logger override when set, otherwise root `logging.enabled` |
+| `level` | per-logger override when set, otherwise root `logging.level` |
+| `format` | root `logging.format` only (`json|text`) |
+
+`./config/app.yaml` logging example:
+
+```yaml
+logging:
+  enabled: true
+  level: info
+  format: json
+  loggers:
+    auth:
+      enabled: true
+      level: debug
+    billing:
+      enabled: false
+```
+
+Environment override keys for logging (when `EnvOverride=true`):
+
+- `COMMON_FWK_LOGGING_ENABLED`
+- `COMMON_FWK_LOGGING_LEVEL`
+- `COMMON_FWK_LOGGING_FORMAT`
+- `COMMON_FWK_LOGGING_LOGGERS_<NAME>_ENABLED`
+- `COMMON_FWK_LOGGING_LOGGERS_<NAME>_LEVEL`
+
+Examples:
+- `COMMON_FWK_LOGGING_LOGGERS_AUTH_LEVEL=debug`
+- `COMMON_FWK_LOGGING_LOGGERS_BILLING_ENABLED=false`
+
+Required output contract for accepted records:
+- `logger`
+- `ts`
+- `level`
+- `msg`
+
+JSON output example:
+
+```json
+{"ts":"2026-05-01T19:40:00Z","level":"INFO","msg":"request accepted","logger":"auth"}
+```
+
+Text output example:
+
+```text
+ts=2026-05-01T19:40:00Z level=INFO msg="request accepted" logger=auth
+```
+
+Loki guidance (collector-first):
+- Keep application logs framework-structured and sink-agnostic.
+- Prefer Promtail/OpenTelemetry collector pipelines to ship logs to Loki.
+- Preserve structured keys (`logger`, `ts`, `level`, `msg`) end-to-end for queryability.
+
 ---
 
 ## Layered architecture overview

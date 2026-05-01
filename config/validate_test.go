@@ -175,6 +175,51 @@ func TestValidateConfigInvalid(t *testing.T) {
 			wantSentinel: ErrRequired,
 			wantPath:     "security.auth.oauth2.providers.github.clientID",
 		},
+		{
+			name: "invalid logging format",
+			mutate: func(cfg Config) Config {
+				cfg.Logging.Format = "pretty"
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "logging.format",
+		},
+		{
+			name: "invalid root logging level",
+			mutate: func(cfg Config) Config {
+				cfg.Logging.Level = "verbose"
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "logging.level",
+		},
+		{
+			name: "invalid logger key blank",
+			mutate: func(cfg Config) Config {
+				cfg.Logging.Loggers["   "] = LoggerOverrideConfig{Level: "debug"}
+				return cfg
+			},
+			wantSentinel: ErrRequired,
+			wantPath:     "logging.loggers",
+		},
+		{
+			name: "invalid logger key contains whitespace",
+			mutate: func(cfg Config) Config {
+				cfg.Logging.Loggers["billing api"] = LoggerOverrideConfig{Level: "debug"}
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "logging.loggers",
+		},
+		{
+			name: "invalid per-logger level",
+			mutate: func(cfg Config) Config {
+				cfg.Logging.Loggers["auth"] = LoggerOverrideConfig{Level: "notice"}
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "logging.loggers.auth.level",
+		},
 	}
 
 	for _, tc := range tests {
@@ -205,6 +250,33 @@ func TestValidateConfigInvalid(t *testing.T) {
 				t.Fatalf("expected path %q, got %q", tc.wantPath, vErr.Path)
 			}
 		})
+	}
+}
+
+func TestValidateConfigNormalizesLoggingValues(t *testing.T) {
+	t.Parallel()
+
+	enabled := true
+	input := validConfigFixture()
+	input.Logging.Level = " WARN "
+	input.Logging.Format = " JSON "
+	input.Logging.Loggers = map[string]LoggerOverrideConfig{
+		"auth": {Enabled: &enabled, Level: " DEBUG "},
+	}
+
+	validated, err := ValidateConfig(input)
+	if err != nil {
+		t.Fatalf("expected successful validation, got: %v", err)
+	}
+
+	if validated.Logging.Level != "warn" {
+		t.Fatalf("expected normalized logging level warn, got %q", validated.Logging.Level)
+	}
+	if validated.Logging.Format != "json" {
+		t.Fatalf("expected normalized logging format json, got %q", validated.Logging.Format)
+	}
+	if validated.Logging.Loggers["auth"].Level != "debug" {
+		t.Fatalf("expected normalized per-logger level debug, got %q", validated.Logging.Loggers["auth"].Level)
 	}
 }
 
