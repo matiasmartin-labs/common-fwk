@@ -287,6 +287,230 @@ func TestOrderingGuards_ReturnExpectedErrors(t *testing.T) {
 	})
 }
 
+func TestEnableHealthReadinessPresets_OptionsAndOrdering(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fails before server bootstrap", func(t *testing.T) {
+		a := NewApplication()
+
+		err := a.EnableHealthReadinessPresets(HealthReadinessOptions{})
+		if !errors.Is(err, ErrServerNotReady) {
+			t.Fatalf("expected ErrServerNotReady, got %v", err)
+		}
+	})
+
+	tests := []struct {
+		name    string
+		opts    HealthReadinessOptions
+		wantErr error
+	}{
+		{
+			name:    "blank health path rejected",
+			opts:    HealthReadinessOptions{HealthPath: "   "},
+			wantErr: ErrInvalidPresetOptions,
+		},
+		{
+			name:    "blank ready path rejected",
+			opts:    HealthReadinessOptions{ReadyPath: "\t"},
+			wantErr: ErrInvalidPresetOptions,
+		},
+		{
+			name:    "same path rejected after defaults resolution",
+			opts:    HealthReadinessOptions{HealthPath: "/same", ReadyPath: "/same"},
+			wantErr: ErrInvalidPresetOptions,
+		},
+		{
+			name: "defaults are accepted",
+			opts: HealthReadinessOptions{},
+		},
+		{
+			name: "custom paths are accepted",
+			opts: HealthReadinessOptions{HealthPath: "/live", ReadyPath: "/ready"},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			a := NewApplication().UseConfig(testConfig()).UseServer()
+
+			err := a.EnableHealthReadinessPresets(tc.opts)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("expected %v, got %v", tc.wantErr, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestEnableHealthReadinessPresets_ConflictPreflightAndNoPartialRegistration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("health conflict fails and does not install readiness", func(t *testing.T) {
+		a := NewApplication().UseConfig(testConfig()).UseServer()
+
+		if err := a.RegisterGET("/healthz", func(c *gin.Context) { c.Status(http.StatusAccepted) }); err != nil {
+			t.Fatalf("register conflicting route: %v", err)
+		}
+
+		err := a.EnableHealthReadinessPresets(HealthReadinessOptions{ReadyPath: "/readyz-alt"})
+		if !errors.Is(err, ErrRouteConflict) {
+			t.Fatalf("expected ErrRouteConflict, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "method=GET") || !strings.Contains(err.Error(), "path=\"/healthz\"") {
+			t.Fatalf("expected error context with method/path, got %q", err.Error())
+		}
+
+		wExisting := httptest.NewRecorder()
+		a.handler.ServeHTTP(wExisting, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+		if wExisting.Code != http.StatusAccepted {
+			t.Fatalf("existing route should remain unchanged, got %d", wExisting.Code)
+		}
+
+		wReady := httptest.NewRecorder()
+		a.handler.ServeHTTP(wReady, httptest.NewRequest(http.MethodGet, "/readyz-alt", nil))
+		if wReady.Code != http.StatusNotFound {
+			t.Fatalf("ready route must not be partially registered, got %d", wReady.Code)
+		}
+	})
+
+	t.Run("ready conflict fails", func(t *testing.T) {
+		a := NewApplication().UseConfig(testConfig()).UseServer()
+
+		if err := a.RegisterGET("/readyz", func(c *gin.Context) { c.Status(http.StatusAccepted) }); err != nil {
+			t.Fatalf("register conflicting route: %v", err)
+		}
+
+		err := a.EnableHealthReadinessPresets(HealthReadinessOptions{})
+		if !errors.Is(err, ErrRouteConflict) {
+			t.Fatalf("expected ErrRouteConflict, got %v", err)
+		}
+	})
+}
+
+func TestEnableHealthReadinessPresets_HTTPBehavior_DefaultAndCustomPaths(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default paths with readiness pass and fail", func(t *testing.T) {
+		pass := func() error { return nil }
+		fail := func() error { return errors.New("dependency down") }
+
+		aPass := NewApplication().UseConfig(testConfig()).UseServer()
+		if err := aPass.EnableHealthReadinessPresets(HealthReadinessOptions{Checks: []ReadinessCheck{pass, pass}}); err != nil {
+			t.Fatalf("enable presets (pass): %v", err)
+		}
+
+		wHealth := httptest.NewRecorder()
+		aPass.handler.ServeHTTP(wHealth, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+		if wHealth.Code != http.StatusOK {
+			t.Fatalf("/healthz expected 200 got %d", wHealth.Code)
+		}
+
+		wReadyPass := httptest.NewRecorder()
+		aPass.handler.ServeHTTP(wReadyPass, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+		if wReadyPass.Code != http.StatusOK {
+			t.Fatalf("/readyz expected 200 when checks pass got %d", wReadyPass.Code)
+		}
+
+		aFail := NewApplication().UseConfig(testConfig()).UseServer()
+		if err := aFail.EnableHealthReadinessPresets(HealthReadinessOptions{Checks: []ReadinessCheck{pass, fail}}); err != nil {
+			t.Fatalf("enable presets (fail): %v", err)
+		}
+
+		wReadyFail := httptest.NewRecorder()
+		aFail.handler.ServeHTTP(wReadyFail, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+		if wReadyFail.Code != http.StatusServiceUnavailable {
+			t.Fatalf("/readyz expected 503 when a check fails got %d", wReadyFail.Code)
+		}
+	})
+
+	t.Run("custom paths are honored and defaults not duplicated", func(t *testing.T) {
+		a := NewApplication().UseConfig(testConfig()).UseServer()
+		err := a.EnableHealthReadinessPresets(HealthReadinessOptions{
+			HealthPath: "/livez",
+			ReadyPath:  "/readyz-custom",
+			Checks: []ReadinessCheck{
+				func() error { return nil },
+			},
+		})
+		if err != nil {
+			t.Fatalf("enable custom presets: %v", err)
+		}
+
+		wCustomHealth := httptest.NewRecorder()
+		a.handler.ServeHTTP(wCustomHealth, httptest.NewRequest(http.MethodGet, "/livez", nil))
+		if wCustomHealth.Code != http.StatusOK {
+			t.Fatalf("custom health expected 200 got %d", wCustomHealth.Code)
+		}
+
+		wCustomReady := httptest.NewRecorder()
+		a.handler.ServeHTTP(wCustomReady, httptest.NewRequest(http.MethodGet, "/readyz-custom", nil))
+		if wCustomReady.Code != http.StatusOK {
+			t.Fatalf("custom ready expected 200 got %d", wCustomReady.Code)
+		}
+
+		wDefaultHealth := httptest.NewRecorder()
+		a.handler.ServeHTTP(wDefaultHealth, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+		if wDefaultHealth.Code != http.StatusNotFound {
+			t.Fatalf("default health path should not be duplicated, got %d", wDefaultHealth.Code)
+		}
+
+		wDefaultReady := httptest.NewRecorder()
+		a.handler.ServeHTTP(wDefaultReady, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+		if wDefaultReady.Code != http.StatusNotFound {
+			t.Fatalf("default ready path should not be duplicated, got %d", wDefaultReady.Code)
+		}
+	})
+
+	t.Run("unmet invariant returns 503", func(t *testing.T) {
+		a := NewApplication().UseConfig(testConfig()).UseServer()
+		if err := a.EnableHealthReadinessPresets(HealthReadinessOptions{}); err != nil {
+			t.Fatalf("enable presets: %v", err)
+		}
+
+		a.server.Handler = nil
+
+		wReady := httptest.NewRecorder()
+		a.handler.ServeHTTP(wReady, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+		if wReady.Code != http.StatusServiceUnavailable {
+			t.Fatalf("/readyz expected 503 when invariant is unmet got %d", wReady.Code)
+		}
+	})
+}
+
+func TestManualRouteRegistration_UnchangedWithoutPresets(t *testing.T) {
+	t.Parallel()
+
+	a := NewApplication().UseConfig(testConfig()).UseServer()
+	if err := a.RegisterGET("/health", func(c *gin.Context) { c.Status(http.StatusNoContent) }); err != nil {
+		t.Fatalf("register manual route: %v", err)
+	}
+
+	wManual := httptest.NewRecorder()
+	a.handler.ServeHTTP(wManual, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if wManual.Code != http.StatusNoContent {
+		t.Fatalf("manual route expected 204 got %d", wManual.Code)
+	}
+
+	wPresetHealth := httptest.NewRecorder()
+	a.handler.ServeHTTP(wPresetHealth, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if wPresetHealth.Code != http.StatusNotFound {
+		t.Fatalf("/healthz should not exist without explicit preset opt-in, got %d", wPresetHealth.Code)
+	}
+
+	wPresetReady := httptest.NewRecorder()
+	a.handler.ServeHTTP(wPresetReady, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if wPresetReady.Code != http.StatusNotFound {
+		t.Fatalf("/readyz should not exist without explicit preset opt-in, got %d", wPresetReady.Code)
+	}
+}
+
 func TestRunListener_ServesRequestAndStopsCleanly(t *testing.T) {
 	a := NewApplication().UseConfig(testConfig()).UseServer()
 	if err := a.RegisterGET("/health", func(c *gin.Context) { c.String(http.StatusOK, "ok") }); err != nil {
@@ -461,11 +685,11 @@ func TestAccessors_LifecycleMatrix(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		bootstrap      func(*Application)
-		wantConfig     config.Config
-		wantValidator  bool
-		wantSecReady   bool
+		name          string
+		bootstrap     func(*Application)
+		wantConfig    config.Config
+		wantValidator bool
+		wantSecReady  bool
 	}{
 		{
 			name:          "pre-init returns explicit non-ready values",
@@ -479,18 +703,18 @@ func TestAccessors_LifecycleMatrix(t *testing.T) {
 			bootstrap: func(a *Application) {
 				a.UseConfig(testConfigWithOAuth2Provider())
 			},
-			wantConfig:     testConfigWithOAuth2Provider(),
-			wantValidator:  false,
-			wantSecReady:   false,
+			wantConfig:    testConfigWithOAuth2Provider(),
+			wantValidator: false,
+			wantSecReady:  false,
 		},
 		{
 			name: "post-init with direct validator exposes both config and security",
 			bootstrap: func(a *Application) {
 				a.UseConfig(testConfigWithOAuth2Provider()).UseServerSecurity(&fakeValidator{})
 			},
-			wantConfig:     testConfigWithOAuth2Provider(),
-			wantValidator:  true,
-			wantSecReady:   true,
+			wantConfig:    testConfigWithOAuth2Provider(),
+			wantValidator: true,
+			wantSecReady:  true,
 		},
 		{
 			name: "post-init with config-driven security exposes both config and security",
@@ -501,9 +725,9 @@ func TestAccessors_LifecycleMatrix(t *testing.T) {
 					t.Fatalf("expected config-driven security wiring success, got %v", err)
 				}
 			},
-			wantConfig:     testConfigWithOAuth2Provider(),
-			wantValidator:  true,
-			wantSecReady:   true,
+			wantConfig:    testConfigWithOAuth2Provider(),
+			wantValidator: true,
+			wantSecReady:  true,
 		},
 	}
 
@@ -672,6 +896,65 @@ func TestDocumentation_AccessorContractSynchronization(t *testing.T) {
 			hasMutationSafetyWording := strings.Contains(lower, "internal runtime state") || strings.Contains(lower, "app internals")
 			if !hasMutationSafetyWording {
 				t.Fatalf("%s must document that external mutation does not affect internals", doc.name)
+			}
+		})
+	}
+}
+
+func TestDocumentation_HealthReadinessPresetContractSynchronization(t *testing.T) {
+	t.Parallel()
+
+	type docSpec struct {
+		name string
+		path string
+	}
+
+	docs := []docSpec{
+		{name: "package docs", path: "doc.go"},
+		{name: "readme", path: "../README.md"},
+		{name: "docs home", path: "../docs/home.md"},
+	}
+
+	for _, doc := range docs {
+		doc := doc
+		t.Run(doc.name, func(t *testing.T) {
+			raw, err := os.ReadFile(doc.path)
+			if err != nil {
+				t.Fatalf("read %s (%s): %v", doc.name, doc.path, err)
+			}
+
+			text := string(raw)
+			lower := strings.ToLower(text)
+
+			if !strings.Contains(text, "EnableHealthReadinessPresets(opts HealthReadinessOptions) error") {
+				t.Fatalf("%s must include explicit preset API signature", doc.name)
+			}
+
+			if !strings.Contains(text, "/healthz") || !strings.Contains(text, "/readyz") {
+				t.Fatalf("%s must document default preset paths /healthz and /readyz", doc.name)
+			}
+
+			hasCustomPathBehavior := strings.Contains(lower, "custom") &&
+				(strings.Contains(lower, "not duplicated") || strings.Contains(lower, "no implicit duplication"))
+			if !hasCustomPathBehavior {
+				t.Fatalf("%s must document custom-path behavior without implicit default duplication", doc.name)
+			}
+
+			hasReadinessSemantics := strings.Contains(lower, "readiness") &&
+				strings.Contains(lower, "200") &&
+				strings.Contains(lower, "503")
+			if !hasReadinessSemantics {
+				t.Fatalf("%s must document readiness 200/503 contract", doc.name)
+			}
+
+			hasNoImplicitRegistration := strings.Contains(lower, "no implicit") || strings.Contains(lower, "never auto-registered")
+			if !hasNoImplicitRegistration {
+				t.Fatalf("%s must document non-goal: no implicit preset registration", doc.name)
+			}
+
+			hasNoProviderProbing := strings.Contains(lower, "no provider-specific") || strings.Contains(lower, "provider-specific probing")
+			if !hasNoProviderProbing {
+				t.Fatalf("%s must document non-goal: no provider-specific probing", doc.name)
 			}
 		})
 	}
