@@ -36,3 +36,14 @@ The migration guide MUST include a compatibility section that lists known breaki
 - GIVEN migration changes were applied in `auth-provider-ms`
 - WHEN maintainers run the documented verification commands
 - THEN compatibility expectations and breaking-change impacts are explicit in the guide
+
+### Requirement: Migration guidance for HS256 to RS256 transition
+
+Migration documentation MUST include an explicit HS256-to-RS256 transition path covering required config key changes, keypair bootstrap expectations, and validation steps proving behavior parity for existing protected routes.
+
+#### Scenario: Migration guide provides executable transition sequence
+
+- GIVEN maintainers currently using HS256 configuration
+- WHEN they follow the documented transition steps to RS256
+- THEN required config and key material changes are explicit
+- AND verification steps confirm expected authentication behavior after migration

@@ -2,6 +2,20 @@ package config
 
 import "time"
 
+const (
+	// JWTAlgorithmHS256 keeps backward-compatible HMAC mode as default.
+	JWTAlgorithmHS256 = "HS256"
+	// JWTAlgorithmRS256 enables RSA verification mode.
+	JWTAlgorithmRS256 = "RS256"
+
+	// RS256KeySourceGenerated derives keys from in-memory generation.
+	RS256KeySourceGenerated = "generated"
+	// RS256KeySourcePublicPEM uses an explicit PEM-encoded public key.
+	RS256KeySourcePublicPEM = "public-pem"
+	// RS256KeySourcePrivatePEM uses an explicit PEM-encoded private key.
+	RS256KeySourcePrivatePEM = "private-pem"
+)
+
 // Config is the root configuration model for common-fwk.
 type Config struct {
 	Server   ServerConfig
@@ -39,9 +53,19 @@ type AuthConfig struct {
 
 // JWTConfig contains token signing and lifetime settings.
 type JWTConfig struct {
+	Algorithm  string
 	Secret     string
 	Issuer     string
 	TTLMinutes int
+	RS256      RS256Config
+}
+
+// RS256Config contains RSA key resolution settings for RS256 mode.
+type RS256Config struct {
+	KeySource     string
+	KeyID         string
+	PublicKeyPEM  string
+	PrivateKeyPEM string
 }
 
 // CookieConfig contains cookie settings used by authentication flows.

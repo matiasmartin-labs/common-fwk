@@ -98,6 +98,11 @@ func applyEnvironmentOverrides(v *viper.Viper, opts Options, snapshot map[string
 	setString("server.host", binding("SERVER_HOST"))
 	setString("security.auth.jwt.secret", binding("SECURITY_AUTH_JWT_SECRET"))
 	setString("security.auth.jwt.issuer", binding("SECURITY_AUTH_JWT_ISSUER"))
+	setString("security.auth.jwt.algorithm", binding("SECURITY_AUTH_JWT_ALGORITHM"))
+	setString("security.auth.jwt.rs256-key-source", binding("SECURITY_AUTH_JWT_RS256_KEY_SOURCE"))
+	setString("security.auth.jwt.rs256-key-id", binding("SECURITY_AUTH_JWT_RS256_KEY_ID"))
+	setString("security.auth.jwt.rs256-public-key-pem", binding("SECURITY_AUTH_JWT_RS256_PUBLIC_KEY_PEM"))
+	setString("security.auth.jwt.rs256-private-key-pem", binding("SECURITY_AUTH_JWT_RS256_PRIVATE_KEY_PEM"))
 	setString("security.auth.cookie.name", binding("SECURITY_AUTH_COOKIE_NAME"))
 	setString("security.auth.cookie.domain", binding("SECURITY_AUTH_COOKIE_DOMAIN"))
 	setString("security.auth.cookie.same-site", binding("SECURITY_AUTH_COOKIE_SAMESITE"))
@@ -165,6 +170,10 @@ func applyEnvironmentOverrides(v *viper.Viper, opts Options, snapshot map[string
 func applyLegacyKeyCompatibility(v *viper.Viper) {
 	aliases := [][2]string{
 		{"security.auth.jwt.ttl-minutes", "security.auth.jwt.ttlMinutes"},
+		{"security.auth.jwt.rs256-key-source", "security.auth.jwt.rs256KeySource"},
+		{"security.auth.jwt.rs256-key-id", "security.auth.jwt.rs256KeyID"},
+		{"security.auth.jwt.rs256-public-key-pem", "security.auth.jwt.rs256PublicKeyPEM"},
+		{"security.auth.jwt.rs256-private-key-pem", "security.auth.jwt.rs256PrivateKeyPEM"},
 		{"security.auth.cookie.http-only", "security.auth.cookie.httpOnly"},
 		{"security.auth.cookie.same-site", "security.auth.cookie.sameSite"},
 	}
@@ -272,6 +281,11 @@ func expandRawConfig(raw rawConfig, snapshot map[string]string) rawConfig {
 	raw.Server.Host = expandWithSnapshot(raw.Server.Host, snapshot)
 	raw.Security.Auth.JWT.Secret = expandWithSnapshot(raw.Security.Auth.JWT.Secret, snapshot)
 	raw.Security.Auth.JWT.Issuer = expandWithSnapshot(raw.Security.Auth.JWT.Issuer, snapshot)
+	raw.Security.Auth.JWT.Algorithm = expandWithSnapshot(raw.Security.Auth.JWT.Algorithm, snapshot)
+	raw.Security.Auth.JWT.RS256KeySource = expandWithSnapshot(raw.Security.Auth.JWT.RS256KeySource, snapshot)
+	raw.Security.Auth.JWT.RS256KeyID = expandWithSnapshot(raw.Security.Auth.JWT.RS256KeyID, snapshot)
+	raw.Security.Auth.JWT.RS256PublicKeyPEM = expandWithSnapshot(raw.Security.Auth.JWT.RS256PublicKeyPEM, snapshot)
+	raw.Security.Auth.JWT.RS256PrivateKeyPEM = expandWithSnapshot(raw.Security.Auth.JWT.RS256PrivateKeyPEM, snapshot)
 	raw.Security.Auth.Cookie.Name = expandWithSnapshot(raw.Security.Auth.Cookie.Name, snapshot)
 	raw.Security.Auth.Cookie.Domain = expandWithSnapshot(raw.Security.Auth.Cookie.Domain, snapshot)
 	raw.Security.Auth.Cookie.SameSite = expandWithSnapshot(raw.Security.Auth.Cookie.SameSite, snapshot)

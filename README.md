@@ -171,7 +171,10 @@ import (
 
 func main() {
 	jwtCfg := config.NewJWTConfig("secret", "common-fwk", 15)
-	compat := securityjwt.FromConfigJWT(jwtCfg)
+	compat, err := securityjwt.FromConfigJWT(jwtCfg)
+	if err != nil {
+		panic(err)
+	}
 
 	validator, err := securityjwt.NewValidator(compat.Options)
 	if err != nil {
@@ -198,6 +201,30 @@ func main() {
 	fmt.Println(validatedClaims.Subject)
 }
 ```
+
+HS256 remains the default when `jwt.algorithm` is omitted.
+
+RS256 config example (kebab-case adapter keys):
+
+```yaml
+security:
+  auth:
+    jwt:
+      algorithm: RS256
+      issuer: common-fwk
+      ttl-minutes: 15
+      rs256-key-source: private-pem
+      rs256-key-id: auth-main
+      rs256-private-key-pem: |
+        -----BEGIN RSA PRIVATE KEY-----
+        ...
+        -----END RSA PRIVATE KEY-----
+```
+
+Supported RS256 key sources:
+- `generated`: in-memory RSA keypair generated at bootstrap
+- `public-pem`: resolver built from `rs256-public-key-pem`
+- `private-pem`: resolver built from `rs256-private-key-pem`
 
 ### 4) Gin integration example (fluent option-style API)
 
@@ -315,6 +342,7 @@ Behavior notes:
 - Register methods return typed sentinel errors when used out of order (for example, server/security not ready).
 - `RegisterProtectedGET` uses `http/gin.NewAuthMiddleware` internally.
 - `RunListener(net.Listener)` is available for test-friendly startup flows.
+- `UseServerSecurityFromConfig()` is available as a thin convenience wrapper around config-driven JWT validator wiring (HS256/RS256).
 
 ---
 

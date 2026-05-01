@@ -82,9 +82,33 @@ func NewJWTConfig(secret, issuer string, ttlMinutes int) JWTConfig {
 	}
 
 	return JWTConfig{
+		Algorithm:  JWTAlgorithmHS256,
 		Secret:     secret,
 		Issuer:     issuer,
 		TTLMinutes: ttlMinutes,
+	}
+}
+
+// NewRS256GeneratedConfig returns RS256 settings for generated key source.
+func NewRS256GeneratedConfig(keyID string) RS256Config {
+	return RS256Config{KeySource: RS256KeySourceGenerated, KeyID: keyID}
+}
+
+// NewRS256PublicPEMConfig returns RS256 settings for public PEM key source.
+func NewRS256PublicPEMConfig(keyID, publicKeyPEM string) RS256Config {
+	return RS256Config{
+		KeySource:    RS256KeySourcePublicPEM,
+		KeyID:        keyID,
+		PublicKeyPEM: publicKeyPEM,
+	}
+}
+
+// NewRS256PrivatePEMConfig returns RS256 settings for private PEM key source.
+func NewRS256PrivatePEMConfig(keyID, privateKeyPEM string) RS256Config {
+	return RS256Config{
+		KeySource:     RS256KeySourcePrivatePEM,
+		KeyID:         keyID,
+		PrivateKeyPEM: privateKeyPEM,
 	}
 }
 

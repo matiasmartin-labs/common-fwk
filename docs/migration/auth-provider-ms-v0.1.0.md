@@ -49,6 +49,23 @@ Legacy camelCase keys remain compatibility-only during migration and should be p
 2. Provide resolver through `security/keys` (for example `NewStaticResolver`, RSA resolver variants).
 3. Keep token issuing concerns in service code; validator options cover runtime token validation.
 
+#### HS256 -> RS256 executable transition sequence
+
+1. In file-based config, set `security.auth.jwt.algorithm=RS256`.
+2. Keep shared JWT fields (`issuer`, `ttl-minutes`) unchanged.
+3. Add RS256 key settings:
+   - `security.auth.jwt.rs256-key-source` (`generated` | `public-pem` | `private-pem`)
+   - `security.auth.jwt.rs256-key-id`
+   - matching PEM field when required by source (`rs256-public-key-pem` or `rs256-private-key-pem`)
+4. Remove HS256 dependency on `security.auth.jwt.secret` for RS256 mode.
+5. Wire validator from config via compatibility path (`security/jwt.FromConfigJWT`) or app helper (`app.UseServerSecurityFromConfig()`).
+
+Verification checklist for migration parity:
+- Protected routes still reject missing token with `401`.
+- Invalid token/signature still returns `401`.
+- Valid RS256 token for configured issuer passes.
+- HS256 path remains valid for services that have not migrated yet (default algorithm behavior).
+
 ### 3) Middleware migration
 
 1. Replace service-local auth middleware wiring with `http/gin.NewAuthMiddleware(validator, opts...)`.

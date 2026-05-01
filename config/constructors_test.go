@@ -65,6 +65,48 @@ func TestNewJWTConfig(t *testing.T) {
 	if actual.TTLMinutes != defaultJWTTTLMinutes {
 		t.Fatalf("expected default ttl %d, got %d", defaultJWTTTLMinutes, actual.TTLMinutes)
 	}
+
+	if actual.Algorithm != JWTAlgorithmHS256 {
+		t.Fatalf("expected default algorithm %q, got %q", JWTAlgorithmHS256, actual.Algorithm)
+	}
+
+	if actual.RS256 != (RS256Config{}) {
+		t.Fatalf("expected RS256 config to default empty, got %+v", actual.RS256)
+	}
+}
+
+func TestNewRS256ConfigHelpers(t *testing.T) {
+	t.Parallel()
+
+	t.Run("generated key source", func(t *testing.T) {
+		cfg := NewRS256GeneratedConfig("kid-1")
+		if cfg.KeySource != RS256KeySourceGenerated {
+			t.Fatalf("expected key source %q, got %q", RS256KeySourceGenerated, cfg.KeySource)
+		}
+		if cfg.KeyID != "kid-1" {
+			t.Fatalf("expected key id kid-1, got %q", cfg.KeyID)
+		}
+	})
+
+	t.Run("public pem key source", func(t *testing.T) {
+		cfg := NewRS256PublicPEMConfig("kid-2", "PUBLIC")
+		if cfg.KeySource != RS256KeySourcePublicPEM {
+			t.Fatalf("expected key source %q, got %q", RS256KeySourcePublicPEM, cfg.KeySource)
+		}
+		if cfg.PublicKeyPEM != "PUBLIC" {
+			t.Fatalf("expected public pem to be preserved")
+		}
+	})
+
+	t.Run("private pem key source", func(t *testing.T) {
+		cfg := NewRS256PrivatePEMConfig("kid-3", "PRIVATE")
+		if cfg.KeySource != RS256KeySourcePrivatePEM {
+			t.Fatalf("expected key source %q, got %q", RS256KeySourcePrivatePEM, cfg.KeySource)
+		}
+		if cfg.PrivateKeyPEM != "PRIVATE" {
+			t.Fatalf("expected private pem to be preserved")
+		}
+	})
 }
 
 func TestNewCookieConfig(t *testing.T) {
