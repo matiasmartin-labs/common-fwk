@@ -314,3 +314,56 @@ func TestDocsRuntimeLimitsContract(t *testing.T) {
 		})
 	}
 }
+
+func TestDocsJWTModeReleaseAndMigrationContracts(t *testing.T) {
+	t.Helper()
+
+	tests := []struct {
+		name      string
+		path      string
+		fragments []string
+	}{
+		{
+			name: "release checklist includes HS256 and RS256 verification checkpoints",
+			path: filepath.Join("docs", "releases", "v0.2.0-checklist.md"),
+			fragments: []string{
+				"Validate JWT mode-aware docs include HS256 default behavior and RS256 bootstrap keys",
+				"Verify RS256 key-source coverage in tests (`generated`, `public-pem`, `private-pem`).",
+				"Verify HS256 backward compatibility tests remain green.",
+				"Validate migration guide at `docs/migration/auth-provider-ms-v0.1.0.md` is complete.",
+			},
+		},
+		{
+			name: "migration guide includes executable HS256 to RS256 sequence and parity checks",
+			path: filepath.Join("docs", "migration", "auth-provider-ms-v0.1.0.md"),
+			fragments: []string{
+				"HS256 -> RS256 executable transition sequence",
+				"security.auth.jwt.algorithm=RS256",
+				"security.auth.jwt.rs256-key-source",
+				"security.auth.jwt.rs256-key-id",
+				"Protected routes still reject missing token with `401`.",
+				"Valid RS256 token for configured issuer passes.",
+				"HS256 path remains valid for services that have not migrated yet (default algorithm behavior).",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Helper()
+
+			content, err := os.ReadFile(tc.path)
+			if err != nil {
+				t.Fatalf("read docs file %q: %v", tc.path, err)
+			}
+
+			doc := string(content)
+			for _, fragment := range tc.fragments {
+				if !strings.Contains(doc, fragment) {
+					t.Fatalf("docs file %q missing required JWT mode contract fragment %q", tc.path, fragment)
+				}
+			}
+		})
+	}
+}

@@ -39,9 +39,14 @@ type rawAuthConfig struct {
 type rawLegacy struct{}
 
 type rawJWTConfig struct {
-	Secret     string `mapstructure:"secret"`
-	Issuer     string `mapstructure:"issuer"`
-	TTLMinutes int    `mapstructure:"ttl-minutes"`
+	Algorithm          string `mapstructure:"algorithm"`
+	Secret             string `mapstructure:"secret"`
+	Issuer             string `mapstructure:"issuer"`
+	TTLMinutes         int    `mapstructure:"ttl-minutes"`
+	RS256KeySource     string `mapstructure:"rs256-key-source"`
+	RS256KeyID         string `mapstructure:"rs256-key-id"`
+	RS256PublicKeyPEM  string `mapstructure:"rs256-public-key-pem"`
+	RS256PrivateKeyPEM string `mapstructure:"rs256-private-key-pem"`
 }
 
 type rawCookieConfig struct {
@@ -80,6 +85,15 @@ func mapRawToCore(raw rawConfig) (config.Config, error) {
 		},
 	)
 	jwt := config.NewJWTConfig(raw.Security.Auth.JWT.Secret, raw.Security.Auth.JWT.Issuer, raw.Security.Auth.JWT.TTLMinutes)
+	if raw.Security.Auth.JWT.Algorithm != "" {
+		jwt.Algorithm = raw.Security.Auth.JWT.Algorithm
+	}
+	jwt.RS256 = config.RS256Config{
+		KeySource:     raw.Security.Auth.JWT.RS256KeySource,
+		KeyID:         raw.Security.Auth.JWT.RS256KeyID,
+		PublicKeyPEM:  raw.Security.Auth.JWT.RS256PublicKeyPEM,
+		PrivateKeyPEM: raw.Security.Auth.JWT.RS256PrivateKeyPEM,
+	}
 	cookie := config.NewCookieConfig(
 		raw.Security.Auth.Cookie.Name,
 		raw.Security.Auth.Cookie.Domain,

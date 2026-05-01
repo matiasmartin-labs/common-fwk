@@ -14,6 +14,16 @@ This index groups the main project documentation pages.
 ## Notes
 
 - File-based config examples use canonical kebab-case keys (`ttl-minutes`, `http-only`, `same-site`, `client-id`, `client-secret`, `auth-url`, `token-url`, `redirect-url`).
+- JWT mode-aware config defaults to HS256 when `security.auth.jwt.algorithm` is omitted.
+- RS256 adapter keys (kebab-case):
+  - `security.auth.jwt.rs256-key-source`
+  - `security.auth.jwt.rs256-key-id`
+  - `security.auth.jwt.rs256-public-key-pem`
+  - `security.auth.jwt.rs256-private-key-pem`
+- RS256 key sources:
+  - `generated` (in-memory keypair bootstrap)
+  - `public-pem`
+  - `private-pem`
 - Server runtime-limit contract:
   - `server.read-timeout` (default `10s`)
   - `server.write-timeout` (default `10s`)

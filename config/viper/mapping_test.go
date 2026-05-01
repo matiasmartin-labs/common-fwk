@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/matiasmartin-labs/common-fwk/config"
 )
 
 func TestMappingReturnsTypedErrorForInvalidProviderKey(t *testing.T) {
@@ -13,7 +15,7 @@ func TestMappingReturnsTypedErrorForInvalidProviderKey(t *testing.T) {
 	_, err := mapRawToCore(rawConfig{
 		Server: rawServerConfig{Host: "127.0.0.1", Port: 8080, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, MaxHeaderBytes: 1024},
 		Security: rawSecurityConfig{Auth: rawAuthConfig{
-			JWT:    rawJWTConfig{Secret: "secret", Issuer: "issuer", TTLMinutes: 15},
+			JWT:    rawJWTConfig{Algorithm: "HS256", Secret: "secret", Issuer: "issuer", TTLMinutes: 15},
 			Cookie: rawCookieConfig{Name: "session", SameSite: "Lax"},
 			Login:  rawLoginConfig{Email: "owner@example.com"},
 			OAuth2: rawOAuth2Config{Providers: map[string]rawOAuth2ProviderConfig{
@@ -51,7 +53,14 @@ func TestMappingDeterministicAndDefensiveCopies(t *testing.T) {
 	raw := rawConfig{
 		Server: rawServerConfig{Host: "127.0.0.1", Port: 8080, ReadTimeout: 9 * time.Second, WriteTimeout: 11 * time.Second, MaxHeaderBytes: 2048},
 		Security: rawSecurityConfig{Auth: rawAuthConfig{
-			JWT:    rawJWTConfig{Secret: "secret", Issuer: "issuer", TTLMinutes: 15},
+			JWT: rawJWTConfig{
+				Algorithm:         "RS256",
+				Issuer:            "issuer",
+				TTLMinutes:        15,
+				RS256KeySource:    "public-pem",
+				RS256KeyID:        "rsa-key",
+				RS256PublicKeyPEM: "PUBLIC",
+			},
 			Cookie: rawCookieConfig{Name: "session", Domain: "example.com", Secure: true, HTTPOnly: true, SameSite: "Lax"},
 			Login:  rawLoginConfig{Email: "owner@example.com"},
 			OAuth2: rawOAuth2Config{Providers: map[string]rawOAuth2ProviderConfig{
@@ -89,6 +98,16 @@ func TestMappingDeterministicAndDefensiveCopies(t *testing.T) {
 	}
 	if first.Server.MaxHeaderBytes != 2048 {
 		t.Fatalf("expected max header bytes to be mapped, got %d", first.Server.MaxHeaderBytes)
+	}
+
+	if first.Security.Auth.JWT.Algorithm != config.JWTAlgorithmRS256 {
+		t.Fatalf("expected algorithm RS256, got %q", first.Security.Auth.JWT.Algorithm)
+	}
+	if first.Security.Auth.JWT.RS256.KeySource != config.RS256KeySourcePublicPEM {
+		t.Fatalf("expected key source public-pem, got %q", first.Security.Auth.JWT.RS256.KeySource)
+	}
+	if first.Security.Auth.JWT.RS256.KeyID != "rsa-key" {
+		t.Fatalf("expected key id rsa-key, got %q", first.Security.Auth.JWT.RS256.KeyID)
 	}
 
 	raw.Security.Auth.OAuth2.Providers["github"] = rawOAuth2ProviderConfig{}

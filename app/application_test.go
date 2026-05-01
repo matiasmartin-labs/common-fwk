@@ -2,6 +2,10 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -354,6 +358,82 @@ func TestRun_DelegatesToListenAndServeAndPropagatesErrors(t *testing.T) {
 	}
 }
 
+func TestUseServerSecurityFromConfig(t *testing.T) {
+	t.Parallel()
+
+	t.Run("hs256 success", func(t *testing.T) {
+		a := NewApplication().UseConfig(config.Config{
+			Server: config.NewServerConfig("127.0.0.1", 8080),
+			Security: config.NewSecurityConfig(config.NewAuthConfig(
+				config.NewJWTConfig("secret", "common-fwk", 15),
+				config.NewCookieConfig("session", "example.com", true, true, "Lax"),
+				config.NewLoginConfig("owner@example.com"),
+				config.NewOAuth2Config(nil),
+			)),
+		})
+
+		_, err := a.UseServerSecurityFromConfig()
+		if err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		if !a.securityReady {
+			t.Fatalf("expected security to be marked ready")
+		}
+		if a.validator == nil {
+			t.Fatalf("expected validator to be set")
+		}
+	})
+
+	t.Run("rs256 success", func(t *testing.T) {
+		privatePEM := mustRSAPrivatePEM(t)
+
+		jwtCfg := config.NewJWTConfig("", "common-fwk", 15)
+		jwtCfg.Algorithm = config.JWTAlgorithmRS256
+		jwtCfg.RS256 = config.NewRS256PrivatePEMConfig("rsa-key", privatePEM)
+
+		a := NewApplication().UseConfig(config.Config{
+			Server: config.NewServerConfig("127.0.0.1", 8080),
+			Security: config.NewSecurityConfig(config.NewAuthConfig(
+				jwtCfg,
+				config.NewCookieConfig("session", "example.com", true, true, "Lax"),
+				config.NewLoginConfig("owner@example.com"),
+				config.NewOAuth2Config(nil),
+			)),
+		})
+
+		_, err := a.UseServerSecurityFromConfig()
+		if err != nil {
+			t.Fatalf("expected RS256 success, got %v", err)
+		}
+		if !a.securityReady || a.validator == nil {
+			t.Fatalf("expected security wiring to be complete")
+		}
+	})
+
+	t.Run("invalid config does not partially wire", func(t *testing.T) {
+		a := NewApplication().UseConfig(config.Config{
+			Server: config.NewServerConfig("127.0.0.1", 8080),
+			Security: config.NewSecurityConfig(config.NewAuthConfig(
+				config.JWTConfig{Algorithm: config.JWTAlgorithmRS256, Issuer: "common-fwk", TTLMinutes: 15},
+				config.NewCookieConfig("session", "example.com", true, true, "Lax"),
+				config.NewLoginConfig("owner@example.com"),
+				config.NewOAuth2Config(nil),
+			)),
+		})
+
+		_, err := a.UseServerSecurityFromConfig()
+		if err == nil {
+			t.Fatalf("expected config-driven security wiring error")
+		}
+		if a.securityReady {
+			t.Fatalf("expected securityReady to remain false on failure")
+		}
+		if a.validator != nil {
+			t.Fatalf("expected validator to remain nil on failure")
+		}
+	})
+}
+
 func waitHTTPGet(url string, timeout time.Duration) (*http.Response, error) {
 	deadline := time.Now().Add(timeout)
 	var lastErr error
@@ -368,4 +448,18 @@ func waitHTTPGet(url string, timeout time.Duration) (*http.Response, error) {
 	}
 
 	return nil, fmt.Errorf("timeout waiting for %s: %w", url, lastErr)
+}
+
+func mustRSAPrivatePEM(t *testing.T) string {
+	t.Helper()
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate rsa key: %v", err)
+	}
+
+	der := x509.MarshalPKCS1PrivateKey(priv)
+	blk := &pem.Block{Type: "RSA PRIVATE KEY", Bytes: der}
+
+	return string(pem.EncodeToMemory(blk))
 }

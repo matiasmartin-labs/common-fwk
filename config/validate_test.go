@@ -17,6 +17,10 @@ func TestValidateConfigValid(t *testing.T) {
 	if validated.Security.Auth.Login.Email != "owner@example.com" {
 		t.Fatalf("expected normalized email to be preserved in lowercase, got %q", validated.Security.Auth.Login.Email)
 	}
+
+	if validated.Security.Auth.JWT.Algorithm != JWTAlgorithmHS256 {
+		t.Fatalf("expected default JWT algorithm %q, got %q", JWTAlgorithmHS256, validated.Security.Auth.JWT.Algorithm)
+	}
 }
 
 func TestValidateConfigInvalid(t *testing.T) {
@@ -110,6 +114,48 @@ func TestValidateConfigInvalid(t *testing.T) {
 			wantPath:     "security.auth.jwt.secret",
 		},
 		{
+			name: "unsupported jwt algorithm",
+			mutate: func(cfg Config) Config {
+				cfg.Security.Auth.JWT.Algorithm = "HS512"
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "security.auth.jwt.algorithm",
+		},
+		{
+			name: "rs256 missing key id",
+			mutate: func(cfg Config) Config {
+				cfg.Security.Auth.JWT.Algorithm = JWTAlgorithmRS256
+				cfg.Security.Auth.JWT.Secret = ""
+				cfg.Security.Auth.JWT.RS256 = NewRS256GeneratedConfig("")
+				return cfg
+			},
+			wantSentinel: ErrRequired,
+			wantPath:     "security.auth.jwt.rs256.keyID",
+		},
+		{
+			name: "rs256 missing public pem",
+			mutate: func(cfg Config) Config {
+				cfg.Security.Auth.JWT.Algorithm = JWTAlgorithmRS256
+				cfg.Security.Auth.JWT.Secret = ""
+				cfg.Security.Auth.JWT.RS256 = NewRS256PublicPEMConfig("rsa-1", "")
+				return cfg
+			},
+			wantSentinel: ErrRequired,
+			wantPath:     "security.auth.jwt.rs256.publicKeyPEM",
+		},
+		{
+			name: "rs256 missing private pem",
+			mutate: func(cfg Config) Config {
+				cfg.Security.Auth.JWT.Algorithm = JWTAlgorithmRS256
+				cfg.Security.Auth.JWT.Secret = ""
+				cfg.Security.Auth.JWT.RS256 = NewRS256PrivatePEMConfig("rsa-1", "")
+				return cfg
+			},
+			wantSentinel: ErrRequired,
+			wantPath:     "security.auth.jwt.rs256.privateKeyPEM",
+		},
+		{
 			name: "invalid login email",
 			mutate: func(cfg Config) Config {
 				cfg.Security.Auth.Login.Email = "not-an-email"
@@ -159,6 +205,22 @@ func TestValidateConfigInvalid(t *testing.T) {
 				t.Fatalf("expected path %q, got %q", tc.wantPath, vErr.Path)
 			}
 		})
+	}
+}
+
+func TestValidateConfigDefaultsJWTAlgorithmToHS256(t *testing.T) {
+	t.Parallel()
+
+	input := validConfigFixture()
+	input.Security.Auth.JWT.Algorithm = ""
+
+	validated, err := ValidateConfig(input)
+	if err != nil {
+		t.Fatalf("expected successful validation, got: %v", err)
+	}
+
+	if validated.Security.Auth.JWT.Algorithm != JWTAlgorithmHS256 {
+		t.Fatalf("expected normalized algorithm %q, got %q", JWTAlgorithmHS256, validated.Security.Auth.JWT.Algorithm)
 	}
 }
 

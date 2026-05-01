@@ -76,6 +76,121 @@ security:
 	if first.Server.MaxHeaderBytes != 8192 {
 		t.Fatalf("expected max-header-bytes mapping, got %d", first.Server.MaxHeaderBytes)
 	}
+
+	if first.Security.Auth.JWT.Algorithm != config.JWTAlgorithmHS256 {
+		t.Fatalf("expected default algorithm HS256, got %q", first.Security.Auth.JWT.Algorithm)
+	}
+}
+
+func TestLoadRS256CanonicalAndLegacyMapping(t *testing.T) {
+	t.Parallel()
+
+	path := writeTestConfig(t, "rs256-mixed.yaml", `
+server:
+  host: "127.0.0.1"
+  port: 8080
+security:
+  auth:
+    jwt:
+      algorithm: "RS256"
+      secret: "ignored-for-rs256"
+      issuer: "common-fwk"
+      ttl-minutes: 20
+      rs256-key-source: "public-pem"
+      rs256-key-id: "canonical-key"
+      rs256-public-key-pem: "CANONICAL_PUBLIC"
+      rs256KeyID: "legacy-key"
+      rs256PublicKeyPEM: "LEGACY_PUBLIC"
+    cookie:
+      name: "session"
+      domain: "example.com"
+      secure: true
+      http-only: true
+      same-site: "Lax"
+    login:
+      email: "owner@example.com"
+    oauth2:
+      providers: {}
+`)
+
+	first, err := Load(Options{ConfigPath: path})
+	if err != nil {
+		t.Fatalf("expected RS256 load success, got error: %v", err)
+	}
+
+	second, err := Load(Options{ConfigPath: path})
+	if err != nil {
+		t.Fatalf("expected repeated RS256 load success, got error: %v", err)
+	}
+
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("expected deterministic RS256 mapping output")
+	}
+
+	jwtCfg := first.Security.Auth.JWT
+	if jwtCfg.Algorithm != config.JWTAlgorithmRS256 {
+		t.Fatalf("expected RS256 algorithm, got %q", jwtCfg.Algorithm)
+	}
+	if jwtCfg.RS256.KeySource != config.RS256KeySourcePublicPEM {
+		t.Fatalf("expected key source public-pem, got %q", jwtCfg.RS256.KeySource)
+	}
+	if jwtCfg.RS256.KeyID != "canonical-key" {
+		t.Fatalf("expected canonical key id to win, got %q", jwtCfg.RS256.KeyID)
+	}
+	if jwtCfg.RS256.PublicKeyPEM != "CANONICAL_PUBLIC" {
+		t.Fatalf("expected canonical public PEM to win, got %q", jwtCfg.RS256.PublicKeyPEM)
+	}
+}
+
+func TestLoadRS256EnvOverrides(t *testing.T) {
+	path := writeTestConfig(t, "rs256-env.yaml", `
+server:
+  host: "127.0.0.1"
+  port: 8080
+security:
+  auth:
+    jwt:
+      algorithm: "HS256"
+      secret: "file-secret"
+      issuer: "common-fwk"
+      ttl-minutes: 15
+      rs256-key-source: "generated"
+      rs256-key-id: "file-key-id"
+    cookie:
+      name: "session"
+      domain: "example.com"
+      secure: true
+      http-only: true
+      same-site: "Lax"
+    login:
+      email: "owner@example.com"
+    oauth2:
+      providers: {}
+`)
+
+	t.Setenv(defaultEnvPrefix+"_SECURITY_AUTH_JWT_ALGORITHM", "RS256")
+	t.Setenv(defaultEnvPrefix+"_SECURITY_AUTH_JWT_RS256_KEY_SOURCE", "private-pem")
+	t.Setenv(defaultEnvPrefix+"_SECURITY_AUTH_JWT_RS256_KEY_ID", "env-key-id")
+	t.Setenv(defaultEnvPrefix+"_SECURITY_AUTH_JWT_RS256_PRIVATE_KEY_PEM", "ENV_PRIVATE")
+
+	cfg, err := Load(Options{ConfigPath: path, EnvOverride: true})
+	if err != nil {
+		t.Fatalf("expected RS256 env override load success, got error: %v", err)
+	}
+
+	jwtCfg := cfg.Security.Auth.JWT
+	if jwtCfg.Algorithm != config.JWTAlgorithmRS256 {
+		t.Fatalf("expected env algorithm RS256, got %q", jwtCfg.Algorithm)
+	}
+	if jwtCfg.RS256.KeySource != config.RS256KeySourcePrivatePEM {
+		t.Fatalf("expected env key source private-pem, got %q", jwtCfg.RS256.KeySource)
+	}
+	if jwtCfg.RS256.KeyID != "env-key-id" {
+		t.Fatalf("expected env key id, got %q", jwtCfg.RS256.KeyID)
+	}
+	if jwtCfg.RS256.PrivateKeyPEM != "ENV_PRIVATE" {
+		t.Fatalf("expected env private key pem, got %q", jwtCfg.RS256.PrivateKeyPEM)
+	}
 }
 
 func TestLoadFailureTypes(t *testing.T) {

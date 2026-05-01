@@ -15,6 +15,7 @@ var allowedSameSiteValues = map[string]struct{}{
 // ValidateConfig validates a configuration value and returns a normalized copy.
 func ValidateConfig(cfg Config) (Config, error) {
 	normalized := cfg
+	normalized.Security.Auth.JWT = normalizeJWTConfig(normalized.Security.Auth.JWT)
 	normalized.Security.Auth.Login.Email = normalizeLoginEmail(normalized.Security.Auth.Login.Email)
 
 	if err := validateServer(normalized.Server); err != nil {
@@ -65,8 +66,22 @@ func validateServer(cfg ServerConfig) error {
 }
 
 func validateJWT(cfg JWTConfig) error {
-	if strings.TrimSpace(cfg.Secret) == "" {
-		return invalidAt("security.auth.jwt.secret", ErrRequired)
+	algorithm := strings.TrimSpace(cfg.Algorithm)
+	if algorithm == "" {
+		algorithm = JWTAlgorithmHS256
+	}
+
+	switch algorithm {
+	case JWTAlgorithmHS256:
+		if strings.TrimSpace(cfg.Secret) == "" {
+			return invalidAt("security.auth.jwt.secret", ErrRequired)
+		}
+	case JWTAlgorithmRS256:
+		if err := validateRS256(cfg.RS256); err != nil {
+			return err
+		}
+	default:
+		return invalidAt("security.auth.jwt.algorithm", fmt.Errorf("%w: unsupported algorithm %q", ErrOutOfRange, algorithm))
 	}
 
 	if strings.TrimSpace(cfg.Issuer) == "" {
@@ -78,6 +93,34 @@ func validateJWT(cfg JWTConfig) error {
 	}
 
 	return nil
+}
+
+func validateRS256(cfg RS256Config) error {
+	if strings.TrimSpace(cfg.KeyID) == "" {
+		return invalidAt("security.auth.jwt.rs256.keyID", ErrRequired)
+	}
+
+	keySource := strings.TrimSpace(cfg.KeySource)
+	if keySource == "" {
+		return invalidAt("security.auth.jwt.rs256.keySource", ErrRequired)
+	}
+
+	switch keySource {
+	case RS256KeySourceGenerated:
+		return nil
+	case RS256KeySourcePublicPEM:
+		if strings.TrimSpace(cfg.PublicKeyPEM) == "" {
+			return invalidAt("security.auth.jwt.rs256.publicKeyPEM", ErrRequired)
+		}
+		return nil
+	case RS256KeySourcePrivatePEM:
+		if strings.TrimSpace(cfg.PrivateKeyPEM) == "" {
+			return invalidAt("security.auth.jwt.rs256.privateKeyPEM", ErrRequired)
+		}
+		return nil
+	default:
+		return invalidAt("security.auth.jwt.rs256.keySource", fmt.Errorf("%w: unsupported key source %q", ErrOutOfRange, keySource))
+	}
 }
 
 func validateCookie(cfg CookieConfig) error {
@@ -141,4 +184,13 @@ func validateOAuth2(cfg OAuth2Config) error {
 
 func normalizeLoginEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func normalizeJWTConfig(jwt JWTConfig) JWTConfig {
+	normalized := jwt
+	if strings.TrimSpace(normalized.Algorithm) == "" {
+		normalized.Algorithm = JWTAlgorithmHS256
+	}
+
+	return normalized
 }

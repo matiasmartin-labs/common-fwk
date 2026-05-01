@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"github.com/matiasmartin-labs/common-fwk/config"
 	httpgin "github.com/matiasmartin-labs/common-fwk/http/gin"
 	"github.com/matiasmartin-labs/common-fwk/security"
+	securityjwt "github.com/matiasmartin-labs/common-fwk/security/jwt"
 )
 
 var (
@@ -67,6 +69,27 @@ func (a *Application) UseServerSecurity(v security.Validator) *Application {
 	a.securityReady = v != nil
 
 	return a
+}
+
+// UseServerSecurityFromConfig wires validator from currently loaded config.
+func (a *Application) UseServerSecurityFromConfig() (*Application, error) {
+	validatedCfg, err := config.ValidateConfig(a.cfg)
+	if err != nil {
+		return a, fmt.Errorf("validate config before security wiring: %w", err)
+	}
+
+	compat, err := securityjwt.FromConfigJWT(validatedCfg.Security.Auth.JWT)
+	if err != nil {
+		return a, fmt.Errorf("build validator options from config: %w", err)
+	}
+
+	validator, err := securityjwt.NewValidator(compat.Options)
+	if err != nil {
+		return a, fmt.Errorf("build jwt validator: %w", err)
+	}
+
+	a.UseServerSecurity(validator)
+	return a, nil
 }
 
 func (a *Application) ensureServerReady() error {
