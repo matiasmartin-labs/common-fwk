@@ -355,3 +355,8 @@ Dependency direction is always inward:
 - **Google provider implementation is intentionally outside this framework**.
   - This repo provides generic OAuth2 config fields.
   - Concrete Google OAuth flows, APIs, and provider-specific behavior belong to the consuming application/service layer.
+
+## Release and migration docs
+
+- Release checklist for `v0.1.0`: `docs/releases/v0.1.0-checklist.md`
+- Migration guide for `auth-provider-ms`: `docs/migration/auth-provider-ms-v0.1.0.md`
