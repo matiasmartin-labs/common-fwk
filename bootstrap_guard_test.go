@@ -8,7 +8,9 @@ import (
 )
 
 var bootstrapPackageDirs = []string{
-	"app",
+	// Keep this list for packages that MUST remain docs-only bootstrap stubs.
+	// `app` is intentionally excluded because issue-18 approved its evolution
+	// into a real implementation package.
 }
 
 func TestBootstrapPackagesRemainStructuralOnly(t *testing.T) {
@@ -170,6 +172,30 @@ func TestConfigViperPackageCanEvolveBeyondBootstrapDocs(t *testing.T) {
 
 	if len(goFiles) <= 1 {
 		t.Fatalf("config/viper package must include implementation files beyond doc.go, got %v", goFiles)
+	}
+}
+
+func TestAppPackageCanEvolveBeyondBootstrapDocs(t *testing.T) {
+	t.Helper()
+
+	entries, err := os.ReadDir("app")
+	if err != nil {
+		t.Fatalf("read app dir: %v", err)
+	}
+
+	goFiles := make([]string, 0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		if strings.HasSuffix(entry.Name(), ".go") {
+			goFiles = append(goFiles, entry.Name())
+		}
+	}
+
+	if len(goFiles) <= 1 {
+		t.Fatalf("app package must be allowed to include implementation files beyond doc.go, got %v", goFiles)
 	}
 }
 

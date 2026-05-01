@@ -25,7 +25,7 @@ The repository MUST declare module path `github.com/matiasmartin-labs/common-fwk
 
 ### Requirement: Bootstrap contains no business logic
 
-Bootstrap artifacts created for the initial bootstrap phase MUST NOT include runtime/business behavior; they SHALL be limited to module metadata, package declarations/docs, and CI wiring needed for compile/test validation. This guard SHALL remain applicable to bootstrap-only packages, and SHALL NOT prevent implementation growth in packages explicitly evolved by later approved capabilities (including `config` for `config-core`).
+Bootstrap artifacts created for the initial bootstrap phase MUST NOT include runtime/business behavior; they SHALL be limited to module metadata, package declarations/docs, and CI wiring needed for compile/test validation. This guard SHALL remain applicable to bootstrap-only packages, and SHALL NOT prevent implementation growth in packages explicitly evolved by later approved capabilities (including `config` for `config-core` and `app` for `app-bootstrap`).
 
 #### Scenario: Bootstrap files are structural only
 
@@ -40,9 +40,9 @@ Bootstrap artifacts created for the initial bootstrap phase MUST NOT include run
 - WHEN evaluating conformance to this specification
 - THEN the change is considered non-compliant for phase `sdd-spec`
 
-#### Scenario: Bootstrap guard allows approved config evolution
+#### Scenario: Bootstrap guard allows approved config and app evolution
 
-- GIVEN change `issue-2-config-core` includes implementation files in `config/`
+- GIVEN change `issue-2-config-core` or `issue-18-app-bootstrap` includes implementation files in `config/` or `app/`
 - WHEN bootstrap structural guards are evaluated
-- THEN those guards do not fail solely because `config/` contains non-doc implementation files
+- THEN those guards do not fail solely because those packages contain non-doc implementation files
 - AND bootstrap-only package guard intent is preserved for unaffected packages
