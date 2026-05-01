@@ -12,6 +12,18 @@ var allowedSameSiteValues = map[string]struct{}{
 	"None":   {},
 }
 
+var allowedLoggingLevels = map[string]struct{}{
+	"debug": {},
+	"info":  {},
+	"warn":  {},
+	"error": {},
+}
+
+var allowedLoggingFormats = map[string]struct{}{
+	"json": {},
+	"text": {},
+}
+
 // ValidateConfig validates a configuration value and returns a normalized copy.
 func ValidateConfig(cfg Config) (Config, error) {
 	normalized := cfg
@@ -35,6 +47,11 @@ func ValidateConfig(cfg Config) (Config, error) {
 	}
 
 	if err := validateOAuth2(normalized.Security.Auth.OAuth2); err != nil {
+		return Config{}, wrapInvalidConfig(err)
+	}
+
+	normalized.Logging = normalizeLoggingConfig(normalized.Logging)
+	if err := validateLogging(normalized.Logging); err != nil {
 		return Config{}, wrapInvalidConfig(err)
 	}
 
@@ -182,6 +199,40 @@ func validateOAuth2(cfg OAuth2Config) error {
 	return nil
 }
 
+func validateLogging(cfg LoggingConfig) error {
+	if _, ok := allowedLoggingLevels[cfg.Level]; !ok {
+		return invalidAt("logging.level", fmt.Errorf("%w: unsupported logging level %q", ErrOutOfRange, cfg.Level))
+	}
+
+	if _, ok := allowedLoggingFormats[cfg.Format]; !ok {
+		return invalidAt("logging.format", fmt.Errorf("%w: unsupported logging format %q", ErrOutOfRange, cfg.Format))
+	}
+
+	for name, override := range cfg.Loggers {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			return invalidAt("logging.loggers", fmt.Errorf("%w: logger key must not be empty", ErrRequired))
+		}
+
+		if strings.ContainsAny(trimmed, " \t\n\r") {
+			return invalidAt("logging.loggers", fmt.Errorf("%w: logger key %q must not contain whitespace", ErrOutOfRange, name))
+		}
+
+		if override.Level == "" {
+			continue
+		}
+
+		if _, ok := allowedLoggingLevels[override.Level]; !ok {
+			return invalidAt(
+				fmt.Sprintf("logging.loggers.%s.level", trimmed),
+				fmt.Errorf("%w: unsupported logging level %q", ErrOutOfRange, override.Level),
+			)
+		}
+	}
+
+	return nil
+}
+
 func normalizeLoginEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
@@ -193,4 +244,38 @@ func normalizeJWTConfig(jwt JWTConfig) JWTConfig {
 	}
 
 	return normalized
+}
+
+func normalizeLoggingConfig(logging LoggingConfig) LoggingConfig {
+	normalized := logging
+	if strings.TrimSpace(normalized.Level) == "" {
+		normalized.Level = defaultLoggingLevel
+	}
+	normalized.Level = strings.ToLower(strings.TrimSpace(normalized.Level))
+
+	if strings.TrimSpace(normalized.Format) == "" {
+		normalized.Format = defaultLoggingFormat
+	}
+	normalized.Format = strings.ToLower(strings.TrimSpace(normalized.Format))
+
+	normalized.Loggers = cloneLoggerOverrides(normalized.Loggers)
+	for name, override := range normalized.Loggers {
+		override.Level = strings.ToLower(strings.TrimSpace(override.Level))
+		normalized.Loggers[name] = override
+	}
+
+	return normalized
+}
+
+func cloneLoggerOverrides(loggers map[string]LoggerOverrideConfig) map[string]LoggerOverrideConfig {
+	if loggers == nil {
+		return map[string]LoggerOverrideConfig{}
+	}
+
+	cloned := make(map[string]LoggerOverrideConfig, len(loggers))
+	for name, override := range loggers {
+		cloned[name] = override
+	}
+
+	return cloned
 }

@@ -78,3 +78,43 @@ Ordering and conflict behavior:
 Non-goals:
 - No implicit health/readiness route registration during bootstrap (`UseServer()` remains side-effect free for presets).
 - No provider-specific probing in framework internals; dependency readiness checks are caller-provided.
+
+## Logging registry and output contract
+
+`app.Application` exposes:
+
+- `GetLogger(name string) (logging.Logger, error)`
+
+Lifecycle semantics:
+- Pre-init (`NewApplication()` without `UseConfig(...)`): `GetLogger(...)` returns `ErrLoggingNotReady`.
+- Empty logger names are rejected with `ErrLoggerNameRequired`.
+- Same logger name on the same application returns a deterministic stable instance.
+- Logger caches are isolated per `Application` instance.
+
+Config keys and defaults:
+- `logging.enabled` (default `true`)
+- `logging.level` (default `info`; accepted `debug|info|warn|error`)
+- `logging.format` (default `json`; accepted `json|text`)
+- `logging.loggers.<name>.enabled` (optional)
+- `logging.loggers.<name>.level` (optional)
+
+Precedence:
+- `enabled`: per-logger override if present, else root.
+- `level`: per-logger override if present, else root.
+- `format`: root only.
+
+Output contract:
+- Emitted records include `logger`, `ts`, `level`, `msg` for both JSON and text formats.
+- Effective level filtering is enforced (for example root `warn` drops `info`, keeps `error`).
+
+Environment overrides (`EnvOverride=true`):
+- `COMMON_FWK_LOGGING_ENABLED`
+- `COMMON_FWK_LOGGING_LEVEL`
+- `COMMON_FWK_LOGGING_FORMAT`
+- `COMMON_FWK_LOGGING_LOGGERS_<NAME>_ENABLED`
+- `COMMON_FWK_LOGGING_LOGGERS_<NAME>_LEVEL`
+
+Loki guidance:
+- Collector-first integration is recommended (Promtail / OTel collector).
+- Avoid direct app-level Loki sink coupling.
+- Preserve structured fields (`logger`, `ts`, `level`, `msg`) through the transport pipeline.

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/matiasmartin-labs/common-fwk/config"
+	"github.com/matiasmartin-labs/common-fwk/logging"
 	"github.com/matiasmartin-labs/common-fwk/security/claims"
 )
 
@@ -681,6 +683,183 @@ func TestUseServerSecurityFromConfig(t *testing.T) {
 	})
 }
 
+func TestGetLoggerLifecycleContract(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fails before bootstrap", func(t *testing.T) {
+		a := NewApplication()
+
+		_, err := a.GetLogger("auth")
+		if !errors.Is(err, ErrLoggingNotReady) {
+			t.Fatalf("expected ErrLoggingNotReady, got %v", err)
+		}
+	})
+
+	t.Run("fails on empty name", func(t *testing.T) {
+		a := NewApplication().UseConfig(testConfigWithOAuth2Provider())
+
+		_, err := a.GetLogger("   ")
+		if !errors.Is(err, ErrLoggerNameRequired) {
+			t.Fatalf("expected ErrLoggerNameRequired, got %v", err)
+		}
+	})
+
+	t.Run("returns stable logger for same name", func(t *testing.T) {
+		a := NewApplication().UseConfig(testConfigWithOAuth2Provider())
+
+		first, err := a.GetLogger("auth")
+		if err != nil {
+			t.Fatalf("unexpected first get logger error: %v", err)
+		}
+
+		second, err := a.GetLogger("auth")
+		if err != nil {
+			t.Fatalf("unexpected second get logger error: %v", err)
+		}
+
+		if first != second {
+			t.Fatalf("expected deterministic same-name logger instance")
+		}
+	})
+}
+
+func TestGetLoggerIsolationAndConcurrency(t *testing.T) {
+	t.Parallel()
+
+	baseCfg := testConfigWithOAuth2Provider()
+	authEnabled := true
+	baseCfg.Logging = config.NewLoggingConfig(true, "info", "json", map[string]config.LoggerOverrideConfig{
+		"auth":    {Enabled: &authEnabled, Level: "debug"},
+		"billing": {Level: "error"},
+	})
+
+	appOne := NewApplication().UseConfig(baseCfg)
+	appTwo := NewApplication().UseConfig(baseCfg)
+
+	oneAuth, err := appOne.GetLogger("auth")
+	if err != nil {
+		t.Fatalf("unexpected appOne auth logger error: %v", err)
+	}
+	oneBilling, err := appOne.GetLogger("billing")
+	if err != nil {
+		t.Fatalf("unexpected appOne billing logger error: %v", err)
+	}
+	twoAuth, err := appTwo.GetLogger("auth")
+	if err != nil {
+		t.Fatalf("unexpected appTwo auth logger error: %v", err)
+	}
+
+	if oneAuth == oneBilling {
+		t.Fatalf("expected different names to have isolated logger instances")
+	}
+	if oneAuth == twoAuth {
+		t.Fatalf("expected per-application isolation for same logger name")
+	}
+
+	const workers = 100
+	results := make([]logging.Logger, workers)
+	errCh := make(chan error, workers)
+
+	for i := 0; i < workers; i++ {
+		go func(index int) {
+			l, getErr := appOne.GetLogger("auth")
+			if getErr != nil {
+				errCh <- getErr
+				return
+			}
+			results[index] = l
+			errCh <- nil
+		}(i)
+	}
+
+	for i := 0; i < workers; i++ {
+		if getErr := <-errCh; getErr != nil {
+			t.Fatalf("unexpected concurrent get error: %v", getErr)
+		}
+	}
+
+	for i := 1; i < workers; i++ {
+		if results[i] != results[0] {
+			t.Fatalf("expected all concurrent calls for same name to return identical instance")
+		}
+	}
+}
+
+func TestGetLoggerOutputContractAndFiltering(t *testing.T) {
+	t.Parallel()
+
+	t.Run("json format includes required fields", func(t *testing.T) {
+		cfg := testConfigWithOAuth2Provider()
+		cfg.Logging = config.NewLoggingConfig(true, "info", "json", nil)
+
+		a := NewApplication()
+		a.logOutput = &bytes.Buffer{}
+		a.UseConfig(cfg)
+
+		logger, err := a.GetLogger("auth")
+		if err != nil {
+			t.Fatalf("unexpected get logger error: %v", err)
+		}
+
+		logger.Infof("json hello")
+
+		out := a.logOutput.(*bytes.Buffer).String()
+		for _, token := range []string{"\"logger\":\"auth\"", "\"ts\"", "\"level\":\"INFO\"", "\"msg\":\"json hello\""} {
+			if !strings.Contains(out, token) {
+				t.Fatalf("expected token %q in output %q", token, out)
+			}
+		}
+	})
+
+	t.Run("text format includes required fields", func(t *testing.T) {
+		cfg := testConfigWithOAuth2Provider()
+		cfg.Logging = config.NewLoggingConfig(true, "info", "text", nil)
+
+		a := NewApplication()
+		a.logOutput = &bytes.Buffer{}
+		a.UseConfig(cfg)
+
+		logger, err := a.GetLogger("auth")
+		if err != nil {
+			t.Fatalf("unexpected get logger error: %v", err)
+		}
+
+		logger.Infof("text hello")
+
+		out := a.logOutput.(*bytes.Buffer).String()
+		for _, token := range []string{"logger=auth", "ts=", "level=INFO", "msg=\"text hello\""} {
+			if !strings.Contains(out, token) {
+				t.Fatalf("expected token %q in output %q", token, out)
+			}
+		}
+	})
+
+	t.Run("warn level filters info and emits error", func(t *testing.T) {
+		cfg := testConfigWithOAuth2Provider()
+		cfg.Logging = config.NewLoggingConfig(true, "warn", "json", nil)
+
+		a := NewApplication()
+		a.logOutput = &bytes.Buffer{}
+		a.UseConfig(cfg)
+
+		logger, err := a.GetLogger("auth")
+		if err != nil {
+			t.Fatalf("unexpected get logger error: %v", err)
+		}
+
+		logger.Infof("drop me")
+		logger.Errorf("keep me")
+
+		out := a.logOutput.(*bytes.Buffer).String()
+		if strings.Contains(out, "drop me") {
+			t.Fatalf("expected info to be filtered")
+		}
+		if !strings.Contains(out, "keep me") {
+			t.Fatalf("expected error to be emitted")
+		}
+	})
+}
+
 func TestAccessors_LifecycleMatrix(t *testing.T) {
 	t.Parallel()
 
@@ -955,6 +1134,58 @@ func TestDocumentation_HealthReadinessPresetContractSynchronization(t *testing.T
 			hasNoProviderProbing := strings.Contains(lower, "no provider-specific") || strings.Contains(lower, "provider-specific probing")
 			if !hasNoProviderProbing {
 				t.Fatalf("%s must document non-goal: no provider-specific probing", doc.name)
+			}
+		})
+	}
+}
+
+func TestDocumentation_LoggingContractSynchronization(t *testing.T) {
+	t.Parallel()
+
+	type docSpec struct {
+		name string
+		path string
+	}
+
+	docs := []docSpec{
+		{name: "package docs", path: "doc.go"},
+		{name: "readme", path: "../README.md"},
+		{name: "docs home", path: "../docs/home.md"},
+		{name: "migration guide", path: "../docs/migration/auth-provider-ms-v0.1.0.md"},
+		{name: "release checklist", path: "../docs/releases/v0.2.0-checklist.md"},
+	}
+
+	for _, doc := range docs {
+		doc := doc
+		t.Run(doc.name, func(t *testing.T) {
+			raw, err := os.ReadFile(doc.path)
+			if err != nil {
+				t.Fatalf("read %s (%s): %v", doc.name, doc.path, err)
+			}
+
+			text := string(raw)
+			lower := strings.ToLower(text)
+
+			hasLoggerAPI := strings.Contains(text, "GetLogger(name string) (logging.Logger, error)") || strings.Contains(text, "GetLogger(name)")
+			if !hasLoggerAPI {
+				t.Fatalf("%s must include GetLogger API reference", doc.name)
+			}
+
+			for _, key := range []string{"logging.enabled", "logging.level", "logging.format", "logging.loggers.<name>.level"} {
+				if !strings.Contains(text, key) {
+					t.Fatalf("%s must include logging config key %q", doc.name, key)
+				}
+			}
+
+			for _, field := range []string{"logger", "ts", "level", "msg"} {
+				if !strings.Contains(text, field) {
+					t.Fatalf("%s must include required output field %q", doc.name, field)
+				}
+			}
+
+			hasCollectorGuidance := strings.Contains(lower, "collector-first") || strings.Contains(lower, "promtail") || strings.Contains(lower, "otel collector")
+			if !hasCollectorGuidance {
+				t.Fatalf("%s must include collector-first Loki guidance", doc.name)
 			}
 		})
 	}

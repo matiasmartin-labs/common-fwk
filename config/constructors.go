@@ -12,15 +12,48 @@ const (
 
 	defaultJWTTTLMinutes = 60
 
+	defaultLoggingEnabled = true
+	defaultLoggingLevel   = "info"
+	defaultLoggingFormat  = "json"
+
 	defaultCookieName     = "session"
 	defaultCookieSameSite = "Lax"
 )
 
 // NewConfig constructs the root config from explicit dependencies.
-func NewConfig(server ServerConfig, security SecurityConfig) Config {
+func NewConfig(server ServerConfig, security SecurityConfig, logging ...LoggingConfig) Config {
+	loggingCfg := NewLoggingConfig(defaultLoggingEnabled, defaultLoggingLevel, defaultLoggingFormat, nil)
+	if len(logging) > 0 {
+		loggingCfg = NewLoggingConfig(logging[0].Enabled, logging[0].Level, logging[0].Format, logging[0].Loggers)
+	}
+
 	return Config{
 		Server:   server,
 		Security: security,
+		Logging:  loggingCfg,
+	}
+}
+
+// NewLoggingConfig returns logging config with useful defaults.
+func NewLoggingConfig(enabled bool, level, format string, loggers map[string]LoggerOverrideConfig) LoggingConfig {
+	if level == "" {
+		level = defaultLoggingLevel
+	}
+
+	if format == "" {
+		format = defaultLoggingFormat
+	}
+
+	clonedLoggers := make(map[string]LoggerOverrideConfig, len(loggers))
+	for name, override := range loggers {
+		clonedLoggers[name] = override
+	}
+
+	return LoggingConfig{
+		Enabled: enabled,
+		Level:   level,
+		Format:  format,
+		Loggers: clonedLoggers,
 	}
 }
 

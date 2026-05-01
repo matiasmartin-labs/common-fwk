@@ -13,6 +13,7 @@ var errEmptyProviderKey = errors.New("provider key must not be empty")
 type rawConfig struct {
 	Server   rawServerConfig   `mapstructure:"server"`
 	Security rawSecurityConfig `mapstructure:"security"`
+	Logging  rawLoggingConfig  `mapstructure:"logging"`
 }
 
 type rawServerConfig struct {
@@ -74,6 +75,18 @@ type rawOAuth2ProviderConfig struct {
 	Scopes       []string `mapstructure:"scopes"`
 }
 
+type rawLoggingConfig struct {
+	Enabled *bool                              `mapstructure:"enabled"`
+	Level   string                             `mapstructure:"level"`
+	Format  string                             `mapstructure:"format"`
+	Loggers map[string]rawLoggerOverrideConfig `mapstructure:"loggers"`
+}
+
+type rawLoggerOverrideConfig struct {
+	Enabled *bool  `mapstructure:"enabled"`
+	Level   string `mapstructure:"level"`
+}
+
 func mapRawToCore(raw rawConfig) (config.Config, error) {
 	server := config.NewServerConfig(
 		raw.Server.Host,
@@ -112,7 +125,22 @@ func mapRawToCore(raw rawConfig) (config.Config, error) {
 	auth := config.NewAuthConfig(jwt, cookie, login, oauth2)
 	security := config.NewSecurityConfig(auth)
 
-	return config.NewConfig(server, security), nil
+	loggingEnabled := true
+	if raw.Logging.Enabled != nil {
+		loggingEnabled = *raw.Logging.Enabled
+	}
+
+	loggerOverrides := make(map[string]config.LoggerOverrideConfig, len(raw.Logging.Loggers))
+	for loggerName, loggerOverride := range raw.Logging.Loggers {
+		loggerOverrides[loggerName] = config.LoggerOverrideConfig{
+			Enabled: loggerOverride.Enabled,
+			Level:   loggerOverride.Level,
+		}
+	}
+
+	loggingCfg := config.NewLoggingConfig(loggingEnabled, raw.Logging.Level, raw.Logging.Format, loggerOverrides)
+
+	return config.NewConfig(server, security, loggingCfg), nil
 }
 
 func mapProviders(providers map[string]rawOAuth2ProviderConfig) (map[string]config.OAuth2ProviderConfig, error) {

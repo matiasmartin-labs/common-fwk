@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -11,6 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/matiasmartin-labs/common-fwk/config"
 	httpgin "github.com/matiasmartin-labs/common-fwk/http/gin"
+	"github.com/matiasmartin-labs/common-fwk/logging"
+	loggingslog "github.com/matiasmartin-labs/common-fwk/logging/slog"
 	"github.com/matiasmartin-labs/common-fwk/security"
 	securityjwt "github.com/matiasmartin-labs/common-fwk/security/jwt"
 )
@@ -23,6 +26,8 @@ var (
 	ErrNilListener          = errors.New("nil listener")
 	ErrRouteConflict        = errors.New("route conflict")
 	ErrInvalidPresetOptions = errors.New("invalid preset options")
+	ErrLoggingNotReady      = errors.New("logging runtime not ready")
+	ErrLoggerNameRequired   = errors.New("logger name is required")
 )
 
 const (
@@ -52,12 +57,14 @@ type HealthReadinessOptions struct {
 
 // Application is an instance-scoped bootstrap container.
 type Application struct {
-	cfg           config.Config
-	server        http.Server
-	handler       *gin.Engine
-	validator     security.Validator
-	serverReady   bool
-	securityReady bool
+	cfg            config.Config
+	server         http.Server
+	handler        *gin.Engine
+	validator      security.Validator
+	loggerRegistry logging.Registry
+	logOutput      io.Writer
+	serverReady    bool
+	securityReady  bool
 }
 
 // GetConfig returns a read-only snapshot of the current runtime config.
@@ -80,14 +87,48 @@ func NewApplication() *Application {
 	h := gin.New()
 
 	return &Application{
-		handler: h,
+		handler:   h,
+		logOutput: io.Discard,
 	}
 }
 
 // UseConfig sets application configuration and returns the same instance.
 func (a *Application) UseConfig(cfg config.Config) *Application {
 	a.cfg = cfg
+	a.wireLoggingRuntime(cfg.Logging)
 	return a
+}
+
+func (a *Application) wireLoggingRuntime(loggingCfg config.LoggingConfig) {
+	a.loggerRegistry = loggingslog.NewRegistry(normalizeLoggingConfig(loggingCfg), a.logOutput)
+}
+
+func normalizeLoggingConfig(cfg config.LoggingConfig) config.LoggingConfig {
+	if strings.TrimSpace(cfg.Level) == "" {
+		cfg.Level = "info"
+	}
+	if strings.TrimSpace(cfg.Format) == "" {
+		cfg.Format = "json"
+	}
+	if cfg.Loggers == nil {
+		cfg.Loggers = map[string]config.LoggerOverrideConfig{}
+	}
+
+	return cfg
+}
+
+// GetLogger returns a deterministic named logger when runtime is ready.
+func (a *Application) GetLogger(name string) (logging.Logger, error) {
+	if a.loggerRegistry == nil {
+		return nil, fmt.Errorf("get logger %q: %w", name, ErrLoggingNotReady)
+	}
+
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return nil, fmt.Errorf("get logger %q: %w", name, ErrLoggerNameRequired)
+	}
+
+	return a.loggerRegistry.Get(trimmed), nil
 }
 
 func cloneConfig(cfg config.Config) config.Config {

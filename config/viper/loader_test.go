@@ -45,6 +45,14 @@ security:
           token-url: "https://github.com/login/oauth/access_token"
           redirect-url: "https://app.example.com/auth/github/callback"
           scopes: ["read:user", "user:email"]
+logging:
+  enabled: true
+  level: info
+  format: json
+  loggers:
+    auth:
+      enabled: true
+      level: debug
 `)
 
 	first, err := Load(Options{ConfigPath: configPath})
@@ -80,6 +88,13 @@ security:
 	if first.Security.Auth.JWT.Algorithm != config.JWTAlgorithmHS256 {
 		t.Fatalf("expected default algorithm HS256, got %q", first.Security.Auth.JWT.Algorithm)
 	}
+
+	if first.Logging.Level != "info" || first.Logging.Format != "json" {
+		t.Fatalf("expected logging root mapping to be preserved")
+	}
+	if first.Logging.Loggers["auth"].Level != "debug" {
+		t.Fatalf("expected per-logger logging override mapping")
+	}
 }
 
 func TestLoadRS256CanonicalAndLegacyMapping(t *testing.T) {
@@ -111,6 +126,13 @@ security:
       email: "owner@example.com"
     oauth2:
       providers: {}
+logging:
+  enabled: true
+  level: info
+  format: json
+  loggers:
+    auth:
+      level: info
 `)
 
 	first, err := Load(Options{ConfigPath: path})
@@ -166,6 +188,10 @@ security:
       email: "owner@example.com"
     oauth2:
       providers: {}
+logging:
+  enabled: true
+  level: info
+  format: json
 `)
 
 	t.Setenv(defaultEnvPrefix+"_SECURITY_AUTH_JWT_ALGORITHM", "RS256")
@@ -277,12 +303,18 @@ security:
       email: "owner@example.com"
     oauth2:
       providers: {}
+logging:
+  enabled: true
+  level: info
+  format: json
 `)
 
 	t.Setenv(defaultEnvPrefix+"_SECURITY_AUTH_JWT_SECRET", "env-secret")
 	t.Setenv(defaultEnvPrefix+"_SERVER_READ_TIMEOUT", "8s")
 	t.Setenv(defaultEnvPrefix+"_SERVER_WRITE_TIMEOUT", "9s")
 	t.Setenv(defaultEnvPrefix+"_SERVER_MAX_HEADER_BYTES", "16384")
+	t.Setenv(defaultEnvPrefix+"_LOGGING_LEVEL", "warn")
+	t.Setenv(defaultEnvPrefix+"_LOGGING_LOGGERS_AUTH_LEVEL", "error")
 
 	withoutOverride, err := Load(Options{ConfigPath: path, EnvOverride: false})
 	if err != nil {
@@ -313,6 +345,16 @@ security:
 
 	if withOverride.Server.ReadTimeout != 8*time.Second || withOverride.Server.WriteTimeout != 9*time.Second || withOverride.Server.MaxHeaderBytes != 16384 {
 		t.Fatalf("expected env server runtime limits when EnvOverride=true")
+	}
+
+	if withoutOverride.Logging.Level != "info" {
+		t.Fatalf("expected file logging level when EnvOverride=false, got %q", withoutOverride.Logging.Level)
+	}
+	if withOverride.Logging.Level != "warn" {
+		t.Fatalf("expected env logging.level when EnvOverride=true, got %q", withOverride.Logging.Level)
+	}
+	if withOverride.Logging.Loggers["auth"].Level != "error" {
+		t.Fatalf("expected env logger override level when EnvOverride=true")
 	}
 
 	if !reflect.DeepEqual(withOverride, withOverrideSecond) {
@@ -373,6 +415,10 @@ security:
       email: "owner@example.com"
     oauth2:
       providers: {}
+logging:
+  enabled: true
+  level: info
+  format: json
 `)
 
 			t.Setenv(tc.envKey, tc.envValue)
@@ -415,6 +461,10 @@ security:
       email: "owner@example.com"
     oauth2:
       providers: {}
+logging:
+  enabled: true
+  level: info
+  format: json
 `)
 
 	t.Setenv("APP_HOST", "10.10.10.10")
@@ -488,6 +538,59 @@ security:
 
 	if !errors.Is(err, config.ErrRequired) {
 		t.Fatalf("expected wrapped error to preserve config.ErrRequired")
+	}
+
+	var coreValidation *config.ValidationError
+	if !errors.As(err, &coreValidation) {
+		t.Fatalf("expected core ValidationError to remain assertable")
+	}
+}
+
+func TestLoadWrapsCoreValidationForInvalidLoggingValues(t *testing.T) {
+	t.Parallel()
+
+	path := writeTestConfig(t, "invalid-logging.yaml", `
+server:
+  host: "127.0.0.1"
+  port: 8080
+security:
+  auth:
+    jwt:
+      secret: "secret"
+      issuer: "common-fwk"
+      ttl-minutes: 15
+    cookie:
+      name: "session"
+      domain: "example.com"
+      secure: true
+      http-only: true
+      same-site: "Lax"
+    login:
+      email: "owner@example.com"
+    oauth2:
+      providers: {}
+logging:
+  enabled: true
+  level: info
+  format: pretty
+`)
+
+	_, err := Load(Options{ConfigPath: path})
+	if err == nil {
+		t.Fatalf("expected validation failure")
+	}
+
+	var validationErr *ValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+
+	if !errors.Is(err, config.ErrInvalidConfig) {
+		t.Fatalf("expected wrapped error to preserve config.ErrInvalidConfig")
+	}
+
+	if !errors.Is(err, config.ErrOutOfRange) {
+		t.Fatalf("expected wrapped error to preserve config.ErrOutOfRange")
 	}
 
 	var coreValidation *config.ValidationError

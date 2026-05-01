@@ -79,6 +79,39 @@ Verification checklist for migration parity:
 3. Register routes via `RegisterGET`, `RegisterPOST`, and `RegisterProtectedGET`.
 4. Use `Run()` or `RunListener(...)` depending on runtime/test context.
 
+### 5) Logging migration (collector-first)
+
+1. Replace ad-hoc service logger wiring with `app.Application.GetLogger(name)` where framework logs are needed.
+2. Add root logging config keys in file/env:
+   - `logging.enabled`
+   - `logging.level`
+   - `logging.format`
+3. Add per-logger overrides for boundary-specific behavior:
+   - `logging.loggers.<name>.enabled`
+   - `logging.loggers.<name>.level`
+4. Keep log transport out of app runtime wiring:
+   - prefer Promtail / OpenTelemetry collector pipeline to Loki
+   - do not couple application code directly to Loki sink clients
+5. Preserve structured keys (`logger`, `ts`, `level`, `msg`) through parser/shipper stages.
+
+Example migration config:
+
+```yaml
+logging:
+  enabled: true
+  level: info
+  format: json
+  loggers:
+    auth:
+      level: debug
+    billing:
+      enabled: false
+```
+
+Example env overrides:
+- `COMMON_FWK_LOGGING_LEVEL=warn`
+- `COMMON_FWK_LOGGING_LOGGERS_AUTH_LEVEL=debug`
+
 ## Compatibility and Breaking Changes
 
 ### Expected compatibility
@@ -109,3 +142,6 @@ Recommended parity checks:
 - Invalid issuer/audience -> `401`
 - Header token precedence over cookie token
 - Valid token injects claims into Gin context
+- `GetLogger("auth")` stable instance across repeated calls in same app
+- `GetLogger("")` fails with deterministic error
+- JSON/TEXT records preserve `logger`, `ts`, `level`, `msg` keys after collector parsing
