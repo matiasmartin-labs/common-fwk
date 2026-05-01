@@ -1,0 +1,337 @@
+/*
+ * common-fwk docs — Dark theme override
+ * Inspired by opencode.ai design: deep black background, crisp white text,
+ * green/teal accent color, monospace code blocks.
+ */
+
+/* ── Color tokens ──────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg-base:        #0d0d0d;
+  --bg-surface:     #141414;
+  --bg-elevated:    #1a1a1a;
+  --bg-code:        #111111;
+  --bg-nav:         #0d0d0d;
+  --bg-border:      #242424;
+
+  /* Text */
+  --text-primary:   #e8e8e8;
+  --text-secondary: #a0a0a0;
+  --text-muted:     #5a5a5a;
+
+  /* Accent — opencode green */
+  --accent:         #22c55e;
+  --accent-dim:     #16a34a;
+  --accent-subtle:  rgba(34, 197, 94, 0.08);
+
+  /* Link */
+  --link:           #4ade80;
+  --link-hover:     #86efac;
+
+  /* Code */
+  --code-text:      #a3e635;
+  --code-border:    #2a2a2a;
+
+  /* Sidebar */
+  --nav-width:      260px;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────── */
+body {
+  background-color: var(--bg-base) !important;
+  color: var(--text-primary) !important;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Site header ────────────────────────────────────────────────────── */
+.site-header,
+.site-nav {
+  background-color: var(--bg-nav) !important;
+  border-bottom: 1px solid var(--bg-border) !important;
+}
+
+.site-title {
+  color: var(--text-primary) !important;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.site-title:hover {
+  color: var(--accent) !important;
+  text-decoration: none;
+}
+
+/* ── Sidebar / navigation ───────────────────────────────────────────── */
+.side-bar,
+.nav-list {
+  background-color: var(--bg-nav) !important;
+  border-right: 1px solid var(--bg-border) !important;
+}
+
+.nav-list .nav-list-item .nav-list-link {
+  color: var(--text-secondary) !important;
+  border-radius: 6px;
+  padding: 4px 10px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.nav-list .nav-list-item .nav-list-link:hover {
+  color: var(--text-primary) !important;
+  background-color: var(--bg-elevated) !important;
+  text-decoration: none;
+}
+
+.nav-list .nav-list-item .nav-list-link.active {
+  color: var(--accent) !important;
+  background-color: var(--accent-subtle) !important;
+  font-weight: 600;
+}
+
+.nav-list-item > .nav-list-expander {
+  color: var(--text-muted) !important;
+}
+
+/* Section labels */
+.nav-list .nav-list-item > .nav-list-link:not([href]) {
+  color: var(--text-muted) !important;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── Main content ───────────────────────────────────────────────────── */
+.main-content {
+  background-color: var(--bg-base) !important;
+  max-width: 860px;
+}
+
+.main-content h1,
+.main-content h2,
+.main-content h3,
+.main-content h4,
+.main-content h5,
+.main-content h6 {
+  color: var(--text-primary) !important;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  border-bottom: none !important;
+}
+
+.main-content h1 {
+  font-size: 2rem;
+  margin-top: 0;
+}
+
+.main-content h2 {
+  font-size: 1.35rem;
+  color: var(--text-primary) !important;
+  margin-top: 2rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--bg-border) !important;
+}
+
+.main-content h3 {
+  font-size: 1.1rem;
+}
+
+.main-content p,
+.main-content li {
+  color: var(--text-secondary) !important;
+}
+
+/* ── Links ──────────────────────────────────────────────────────────── */
+a {
+  color: var(--link) !important;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+a:hover {
+  color: var(--link-hover) !important;
+  text-decoration: underline;
+}
+
+/* ── Code ───────────────────────────────────────────────────────────── */
+code,
+pre code {
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", "SF Mono", Consolas, monospace !important;
+  font-size: 0.875em;
+}
+
+code {
+  color: var(--code-text) !important;
+  background-color: var(--bg-elevated) !important;
+  border: 1px solid var(--code-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+pre {
+  background-color: var(--bg-code) !important;
+  border: 1px solid var(--bg-border) !important;
+  border-radius: 8px !important;
+  padding: 1.2rem 1.4rem !important;
+  overflow-x: auto;
+}
+
+pre code {
+  color: #d4d4d4 !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* Syntax highlight adjustments for dark */
+.highlight .k, .highlight .kd, .highlight .kn { color: #c792ea !important; }   /* keywords */
+.highlight .s, .highlight .s1, .highlight .s2 { color: #c3e88d !important; }   /* strings */
+.highlight .c, .highlight .c1, .highlight .cm  { color: #546e7a !important; font-style: italic; } /* comments */
+.highlight .n, .highlight .nf               { color: #82aaff !important; }   /* names/funcs */
+.highlight .mi, .highlight .mf              { color: #f78c6c !important; }   /* numbers */
+.highlight .o                               { color: #89ddff !important; }   /* operators */
+
+/* ── Tables ─────────────────────────────────────────────────────────── */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5rem 0;
+}
+
+th {
+  background-color: var(--bg-elevated) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600;
+  padding: 0.65rem 1rem;
+  border-bottom: 2px solid var(--bg-border) !important;
+  text-align: left;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+td {
+  color: var(--text-secondary) !important;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--bg-border) !important;
+}
+
+tr:hover td {
+  background-color: var(--bg-elevated) !important;
+}
+
+/* ── Horizontal rule ─────────────────────────────────────────────────── */
+hr {
+  border-color: var(--bg-border) !important;
+  margin: 2rem 0;
+}
+
+/* ── Breadcrumbs ─────────────────────────────────────────────────────── */
+.breadcrumb-nav {
+  color: var(--text-muted) !important;
+}
+
+.breadcrumb-nav .breadcrumb-nav-list-item a {
+  color: var(--text-muted) !important;
+}
+
+/* ── Search ──────────────────────────────────────────────────────────── */
+.search-input {
+  background-color: var(--bg-elevated) !important;
+  border: 1px solid var(--bg-border) !important;
+  color: var(--text-primary) !important;
+  border-radius: 6px;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+.search-results-list {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--bg-border) !important;
+  border-radius: 8px;
+}
+
+.search-result {
+  border-bottom: 1px solid var(--bg-border) !important;
+}
+
+.search-result:hover {
+  background-color: var(--bg-elevated) !important;
+}
+
+.search-result-title {
+  color: var(--text-primary) !important;
+}
+
+.search-result-doc-title {
+  color: var(--text-muted) !important;
+}
+
+/* ── Aux nav links ───────────────────────────────────────────────────── */
+.aux-nav .nav-list-link {
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--bg-border);
+  border-radius: 6px;
+  padding: 4px 12px !important;
+  transition: all 0.15s;
+}
+
+.aux-nav .nav-list-link:hover {
+  color: var(--text-primary) !important;
+  border-color: var(--accent) !important;
+  background: var(--accent-subtle) !important;
+  text-decoration: none;
+}
+
+/* ── Page nav (prev/next) ────────────────────────────────────────────── */
+.page-nav,
+.main-content footer {
+  border-top: 1px solid var(--bg-border) !important;
+  color: var(--text-muted) !important;
+}
+
+/* ── Callouts ────────────────────────────────────────────────────────── */
+.callout {
+  background-color: var(--bg-elevated) !important;
+  border-left: 3px solid var(--accent) !important;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary) !important;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ── Selection ───────────────────────────────────────────────────────── */
+::selection {
+  background-color: rgba(34, 197, 94, 0.25);
+  color: var(--text-primary);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+footer {
+  background-color: var(--bg-nav) !important;
+  border-top: 1px solid var(--bg-border) !important;
+  color: var(--text-muted) !important;
+  font-size: 0.8rem;
+}

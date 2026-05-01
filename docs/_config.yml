@@ -6,7 +6,7 @@ description: >
   config, security, HTTP middleware, app bootstrap, logging, and more.
 
 baseurl: ""
-url: "https://matiasmartin-labs.github.io/common-fwk"
+url: "http://common-fwk.mmartinlabs.com"
 
 # Navigation and search
 search_enabled: true
@@ -29,6 +29,13 @@ collections:
   docs:
     permalink: "/:collection/:path/"
     output: true
+
+# Color scheme — dark by default
+color_scheme: dark
+
+# Custom CSS
+custom_css:
+  - assets/css/custom.css
 
 # Back to top
 back_to_top: true
