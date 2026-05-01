@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/matiasmartin-labs/common-fwk/config"
 )
@@ -17,6 +19,9 @@ func TestLoadSuccessAndDeterminism(t *testing.T) {
 server:
   host: "127.0.0.1"
   port: 8080
+  read-timeout: 4s
+  write-timeout: 6s
+  max-header-bytes: 8192
 security:
   auth:
     jwt:
@@ -58,6 +63,18 @@ security:
 
 	if first.Security.Auth.Login.Email != "owner@example.com" {
 		t.Fatalf("expected normalized email from core validation, got %q", first.Security.Auth.Login.Email)
+	}
+
+	if first.Server.ReadTimeout != 4*time.Second {
+		t.Fatalf("expected read-timeout mapping, got %s", first.Server.ReadTimeout)
+	}
+
+	if first.Server.WriteTimeout != 6*time.Second {
+		t.Fatalf("expected write-timeout mapping, got %s", first.Server.WriteTimeout)
+	}
+
+	if first.Server.MaxHeaderBytes != 8192 {
+		t.Fatalf("expected max-header-bytes mapping, got %d", first.Server.MaxHeaderBytes)
 	}
 }
 
@@ -126,6 +143,9 @@ func TestLoadEnvOverrideSemantics(t *testing.T) {
 server:
   host: "127.0.0.1"
   port: 8080
+  read-timeout: 2s
+  write-timeout: 3s
+  max-header-bytes: 4096
 security:
   auth:
     jwt:
@@ -145,6 +165,9 @@ security:
 `)
 
 	t.Setenv(defaultEnvPrefix+"_SECURITY_AUTH_JWT_SECRET", "env-secret")
+	t.Setenv(defaultEnvPrefix+"_SERVER_READ_TIMEOUT", "8s")
+	t.Setenv(defaultEnvPrefix+"_SERVER_WRITE_TIMEOUT", "9s")
+	t.Setenv(defaultEnvPrefix+"_SERVER_MAX_HEADER_BYTES", "16384")
 
 	withoutOverride, err := Load(Options{ConfigPath: path, EnvOverride: false})
 	if err != nil {
@@ -156,12 +179,103 @@ security:
 		t.Fatalf("unexpected load error with EnvOverride=true: %v", err)
 	}
 
+	withOverrideSecond, err := Load(Options{ConfigPath: path, EnvOverride: true})
+	if err != nil {
+		t.Fatalf("unexpected repeated load error with EnvOverride=true: %v", err)
+	}
+
 	if withoutOverride.Security.Auth.JWT.Secret != "file-secret" {
 		t.Fatalf("expected file value when EnvOverride=false, got %q", withoutOverride.Security.Auth.JWT.Secret)
 	}
 
 	if withOverride.Security.Auth.JWT.Secret != "env-secret" {
 		t.Fatalf("expected env value when EnvOverride=true, got %q", withOverride.Security.Auth.JWT.Secret)
+	}
+
+	if withoutOverride.Server.ReadTimeout != 2*time.Second || withoutOverride.Server.WriteTimeout != 3*time.Second || withoutOverride.Server.MaxHeaderBytes != 4096 {
+		t.Fatalf("expected file server runtime limits when EnvOverride=false")
+	}
+
+	if withOverride.Server.ReadTimeout != 8*time.Second || withOverride.Server.WriteTimeout != 9*time.Second || withOverride.Server.MaxHeaderBytes != 16384 {
+		t.Fatalf("expected env server runtime limits when EnvOverride=true")
+	}
+
+	if !reflect.DeepEqual(withOverride, withOverrideSecond) {
+		t.Fatalf("expected deterministic output for identical env snapshot when EnvOverride=true")
+	}
+}
+
+func TestLoadEnvOverrideTypedFailuresForServerRuntimeLimits(t *testing.T) {
+	tests := []struct {
+		name       string
+		envKey     string
+		envValue   string
+		wantSubstr string
+	}{
+		{
+			name:       "invalid server read timeout format",
+			envKey:     defaultEnvPrefix + "_SERVER_READ_TIMEOUT",
+			envValue:   "not-a-duration",
+			wantSubstr: "SERVER_READ_TIMEOUT",
+		},
+		{
+			name:       "invalid server write timeout format",
+			envKey:     defaultEnvPrefix + "_SERVER_WRITE_TIMEOUT",
+			envValue:   "still-not-a-duration",
+			wantSubstr: "SERVER_WRITE_TIMEOUT",
+		},
+		{
+			name:       "invalid max header bytes format",
+			envKey:     defaultEnvPrefix + "_SERVER_MAX_HEADER_BYTES",
+			envValue:   "NaN",
+			wantSubstr: "SERVER_MAX_HEADER_BYTES",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeTestConfig(t, "env-typed-failure.yaml", `
+server:
+  host: "127.0.0.1"
+  port: 8080
+  read-timeout: 2s
+  write-timeout: 3s
+  max-header-bytes: 4096
+security:
+  auth:
+    jwt:
+      secret: "file-secret"
+      issuer: "common-fwk"
+      ttl-minutes: 15
+    cookie:
+      name: "session"
+      domain: "example.com"
+      secure: true
+      http-only: true
+      same-site: "Lax"
+    login:
+      email: "owner@example.com"
+    oauth2:
+      providers: {}
+`)
+
+			t.Setenv(tc.envKey, tc.envValue)
+
+			_, err := Load(Options{ConfigPath: path, EnvOverride: true})
+			if err == nil {
+				t.Fatalf("expected load error")
+			}
+
+			var loadErr *LoadError
+			if !errors.As(err, &loadErr) {
+				t.Fatalf("expected LoadError, got %T", err)
+			}
+
+			if !strings.Contains(err.Error(), tc.wantSubstr) {
+				t.Fatalf("expected error to mention %q, got %v", tc.wantSubstr, err)
+			}
+		})
 	}
 }
 

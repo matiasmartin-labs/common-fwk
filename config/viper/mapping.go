@@ -3,6 +3,7 @@ package viper
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/matiasmartin-labs/common-fwk/config"
 )
@@ -15,8 +16,11 @@ type rawConfig struct {
 }
 
 type rawServerConfig struct {
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
+	Host           string        `mapstructure:"host"`
+	Port           int           `mapstructure:"port"`
+	ReadTimeout    time.Duration `mapstructure:"read-timeout"`
+	WriteTimeout   time.Duration `mapstructure:"write-timeout"`
+	MaxHeaderBytes int           `mapstructure:"max-header-bytes"`
 }
 
 type rawSecurityConfig struct {
@@ -66,7 +70,15 @@ type rawOAuth2ProviderConfig struct {
 }
 
 func mapRawToCore(raw rawConfig) (config.Config, error) {
-	server := config.NewServerConfig(raw.Server.Host, raw.Server.Port)
+	server := config.NewServerConfig(
+		raw.Server.Host,
+		raw.Server.Port,
+		config.ServerRuntimeLimits{
+			ReadTimeout:    raw.Server.ReadTimeout,
+			WriteTimeout:   raw.Server.WriteTimeout,
+			MaxHeaderBytes: raw.Server.MaxHeaderBytes,
+		},
+	)
 	jwt := config.NewJWTConfig(raw.Security.Auth.JWT.Secret, raw.Security.Auth.JWT.Issuer, raw.Security.Auth.JWT.TTLMinutes)
 	cookie := config.NewCookieConfig(
 		raw.Security.Auth.Cookie.Name,

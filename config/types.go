@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // Config is the root configuration model for common-fwk.
 type Config struct {
 	Server   ServerConfig
@@ -8,8 +10,18 @@ type Config struct {
 
 // ServerConfig contains HTTP server settings.
 type ServerConfig struct {
-	Host string
-	Port int
+	Host           string
+	Port           int
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
+	MaxHeaderBytes int
+}
+
+// ServerRuntimeLimits groups HTTP runtime limits for server construction.
+type ServerRuntimeLimits struct {
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
+	MaxHeaderBytes int
 }
 
 // SecurityConfig groups security-related settings.

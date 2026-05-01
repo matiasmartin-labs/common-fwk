@@ -252,3 +252,65 @@ func TestCIBaselineRemainsBootstrapMinimal(t *testing.T) {
 		}
 	}
 }
+
+func TestDocsRuntimeLimitsContract(t *testing.T) {
+	t.Helper()
+
+	tests := []struct {
+		name      string
+		path      string
+		fragments []string
+	}{
+		{
+			name: "README includes runtime-limit keys defaults env and example",
+			path: "README.md",
+			fragments: []string{
+				"read-timeout",
+				"write-timeout",
+				"max-header-bytes",
+				"10s",
+				"1048576",
+				"COMMON_FWK_SERVER_READ_TIMEOUT",
+				"COMMON_FWK_SERVER_WRITE_TIMEOUT",
+				"COMMON_FWK_SERVER_MAX_HEADER_BYTES",
+				"```yaml",
+				"server:",
+			},
+		},
+		{
+			name: "docs home includes runtime-limit keys defaults env and example",
+			path: filepath.Join("docs", "home.md"),
+			fragments: []string{
+				"read-timeout",
+				"write-timeout",
+				"max-header-bytes",
+				"10s",
+				"1048576",
+				"COMMON_FWK_SERVER_READ_TIMEOUT",
+				"COMMON_FWK_SERVER_WRITE_TIMEOUT",
+				"COMMON_FWK_SERVER_MAX_HEADER_BYTES",
+				"```yaml",
+				"server:",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Helper()
+
+			content, err := os.ReadFile(tc.path)
+			if err != nil {
+				t.Fatalf("read docs file %q: %v", tc.path, err)
+			}
+
+			doc := string(content)
+			for _, fragment := range tc.fragments {
+				if !strings.Contains(doc, fragment) {
+					t.Fatalf("docs file %q missing required runtime-limit contract fragment %q", tc.path, fragment)
+				}
+			}
+		})
+	}
+}

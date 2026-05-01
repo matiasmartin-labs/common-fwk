@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/matiasmartin-labs/common-fwk/config"
 	"github.com/spf13/viper"
@@ -108,6 +109,30 @@ func applyEnvironmentOverrides(v *viper.Viper, opts Options, snapshot map[string
 			return fmt.Errorf("parse env %q as int: %w", binding("SERVER_PORT"), err)
 		}
 		v.Set("server.port", parsed)
+	}
+
+	if value, ok := snapshot[binding("SERVER_READ_TIMEOUT")]; ok {
+		parsed, err := time.ParseDuration(strings.TrimSpace(value))
+		if err != nil {
+			return fmt.Errorf("parse env %q as duration: %w", binding("SERVER_READ_TIMEOUT"), err)
+		}
+		v.Set("server.read-timeout", parsed)
+	}
+
+	if value, ok := snapshot[binding("SERVER_WRITE_TIMEOUT")]; ok {
+		parsed, err := time.ParseDuration(strings.TrimSpace(value))
+		if err != nil {
+			return fmt.Errorf("parse env %q as duration: %w", binding("SERVER_WRITE_TIMEOUT"), err)
+		}
+		v.Set("server.write-timeout", parsed)
+	}
+
+	if value, ok := snapshot[binding("SERVER_MAX_HEADER_BYTES")]; ok {
+		parsed, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil {
+			return fmt.Errorf("parse env %q as int: %w", binding("SERVER_MAX_HEADER_BYTES"), err)
+		}
+		v.Set("server.max-header-bytes", parsed)
 	}
 
 	if value, ok := snapshot[binding("SECURITY_AUTH_JWT_TTLMINUTES")]; ok {

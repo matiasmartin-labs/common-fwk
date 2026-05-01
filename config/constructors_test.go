@@ -3,6 +3,7 @@ package config
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestNewServerConfig(t *testing.T) {
@@ -12,22 +13,34 @@ func TestNewServerConfig(t *testing.T) {
 		name     string
 		host     string
 		port     int
+		limits   ServerRuntimeLimits
 		expected ServerConfig
 	}{
 		{
 			name: "uses defaults when zero values are provided",
 			expected: ServerConfig{
-				Host: defaultServerHost,
-				Port: defaultServerPort,
+				Host:           defaultServerHost,
+				Port:           defaultServerPort,
+				ReadTimeout:    defaultServerReadTimeout,
+				WriteTimeout:   defaultServerWriteTimeout,
+				MaxHeaderBytes: defaultServerMaxHeaderBytes,
 			},
 		},
 		{
 			name: "keeps explicit values",
 			host: "0.0.0.0",
 			port: 9090,
+			limits: ServerRuntimeLimits{
+				ReadTimeout:    3 * time.Second,
+				WriteTimeout:   7 * time.Second,
+				MaxHeaderBytes: 2048,
+			},
 			expected: ServerConfig{
-				Host: "0.0.0.0",
-				Port: 9090,
+				Host:           "0.0.0.0",
+				Port:           9090,
+				ReadTimeout:    3 * time.Second,
+				WriteTimeout:   7 * time.Second,
+				MaxHeaderBytes: 2048,
 			},
 		},
 	}
@@ -37,7 +50,7 @@ func TestNewServerConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual := NewServerConfig(tc.host, tc.port)
+			actual := NewServerConfig(tc.host, tc.port, tc.limits)
 			if actual != tc.expected {
 				t.Fatalf("unexpected server config: want %+v, got %+v", tc.expected, actual)
 			}

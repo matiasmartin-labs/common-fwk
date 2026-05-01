@@ -47,6 +47,60 @@ func TestValidateConfigInvalid(t *testing.T) {
 			wantPath:     "server.port",
 		},
 		{
+			name: "server read timeout zero",
+			mutate: func(cfg Config) Config {
+				cfg.Server.ReadTimeout = 0
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "server.readTimeout",
+		},
+		{
+			name: "server read timeout negative",
+			mutate: func(cfg Config) Config {
+				cfg.Server.ReadTimeout = -1
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "server.readTimeout",
+		},
+		{
+			name: "server write timeout zero",
+			mutate: func(cfg Config) Config {
+				cfg.Server.WriteTimeout = 0
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "server.writeTimeout",
+		},
+		{
+			name: "server write timeout negative",
+			mutate: func(cfg Config) Config {
+				cfg.Server.WriteTimeout = -1
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "server.writeTimeout",
+		},
+		{
+			name: "server max header bytes zero",
+			mutate: func(cfg Config) Config {
+				cfg.Server.MaxHeaderBytes = 0
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "server.maxHeaderBytes",
+		},
+		{
+			name: "server max header bytes negative",
+			mutate: func(cfg Config) Config {
+				cfg.Server.MaxHeaderBytes = -1
+				return cfg
+			},
+			wantSentinel: ErrOutOfRange,
+			wantPath:     "server.maxHeaderBytes",
+		},
+		{
 			name: "missing jwt secret",
 			mutate: func(cfg Config) Config {
 				cfg.Security.Auth.JWT.Secret = ""
