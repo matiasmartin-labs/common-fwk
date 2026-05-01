@@ -1,0 +1,163 @@
+name: release-preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    name: Preview next release version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute preview version
+        id: compute
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t release_labels < <(
+            jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH" \
+              | grep -E '^release-type/(patch|minor|major)$' || true
+          )
+
+          if [[ ${#release_labels[@]} -ne 1 ]]; then
+            reason="Expected exactly one release label (release-type/patch|minor|major); found ${#release_labels[@]}: ${release_labels[*]:-(none)}"
+            echo "status=blocked" >> "$GITHUB_OUTPUT"
+            echo "reason=$reason" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Release Preview"
+              echo ""
+              echo ":warning: $reason"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          bump_type="${release_labels[0]#release-type/}"
+
+          baseline="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
+          if [[ -z "$baseline" ]]; then
+            baseline="v0.0.0"
+          fi
+
+          raw="${baseline#v}"
+          IFS='.' read -r major minor patch <<< "$raw"
+
+          case "$bump_type" in
+            patch)
+              next_version="v${major}.${minor}.$((patch + 1))"
+              ;;
+            minor)
+              next_version="v${major}.$((minor + 1)).0"
+              ;;
+            major)
+              next_version="v$((major + 1)).0.0"
+              ;;
+            *)
+              reason="Unsupported bump type: $bump_type"
+              echo "status=blocked" >> "$GITHUB_OUTPUT"
+              echo "reason=$reason" >> "$GITHUB_OUTPUT"
+              {
+                echo "## Release Preview"
+                echo ""
+                echo ":warning: $reason"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+              ;;
+          esac
+
+          echo "status=ready" >> "$GITHUB_OUTPUT"
+          echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+          echo "bump_type=$bump_type" >> "$GITHUB_OUTPUT"
+          echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Release Preview"
+            echo ""
+            echo "- Baseline: \\`$baseline\\`"
+            echo "- Bump type: \\`$bump_type\\`"
+            echo "- Next version: \\`$next_version\\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upsert preview PR comment
+        uses: actions/github-script@v7
+        env:
+          PREVIEW_STATUS: ${{ steps.compute.outputs.status }}
+          PREVIEW_REASON: ${{ steps.compute.outputs.reason }}
+          PREVIEW_BASELINE: ${{ steps.compute.outputs.baseline }}
+          PREVIEW_BUMP_TYPE: ${{ steps.compute.outputs.bump_type }}
+          PREVIEW_NEXT_VERSION: ${{ steps.compute.outputs.next_version }}
+        with:
+          script: |
+            const marker = '<!-- release-preview -->';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.payload.pull_request.number;
+            const status = process.env.PREVIEW_STATUS || 'blocked';
+            const reason = process.env.PREVIEW_REASON || 'Unable to compute preview.';
+            const baseline = process.env.PREVIEW_BASELINE || 'n/a';
+            const bumpType = process.env.PREVIEW_BUMP_TYPE || 'n/a';
+            const nextVersion = process.env.PREVIEW_NEXT_VERSION || 'n/a';
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+
+            let body;
+            if (status === 'ready') {
+              body = [
+                marker,
+                '### Release Preview',
+                `- Baseline: \`${baseline}\``,
+                `- Bump type: \`${bumpType}\``,
+                `- Next version: **\`${nextVersion}\`**`,
+                '',
+                `[View workflow run](${runUrl})`,
+              ].join('\n');
+            } else {
+              body = [
+                marker,
+                '### Release Preview',
+                `:warning: ${reason}`,
+                '',
+                'Add exactly one label: `release-type/patch`, `release-type/minor`, or `release-type/major`.',
+                '',
+                `[View workflow run](${runUrl})`,
+              ].join('\n');
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((comment) =>
+              comment?.body?.includes(marker) &&
+              (comment.user?.type === 'Bot' || comment.user?.login?.endsWith('[bot]'))
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+              core.info(`Updated release preview comment #${existing.id}`);
+            } else {
+              const created = await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+              core.info(`Created release preview comment #${created.data.id}`);
+            }

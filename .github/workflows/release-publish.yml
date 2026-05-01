@@ -1,0 +1,104 @@
+name: release-publish
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  publish:
+    name: Publish semantic release
+    if: ${{ github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute release version
+        id: compute
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t release_labels < <(
+            jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH" \
+              | grep -E '^release-type/(patch|minor|major)$' || true
+          )
+
+          if [[ ${#release_labels[@]} -ne 1 ]]; then
+            echo "Expected exactly one release label (release-type/patch|minor|major); found ${#release_labels[@]}: ${release_labels[*]:-(none)}"
+            exit 1
+          fi
+
+          bump_type="${release_labels[0]#release-type/}"
+
+          baseline="$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
+          if [[ -z "$baseline" ]]; then
+            baseline="v0.0.0"
+          fi
+
+          raw="${baseline#v}"
+          IFS='.' read -r major minor patch <<< "$raw"
+
+          case "$bump_type" in
+            patch)
+              next_version="v${major}.${minor}.$((patch + 1))"
+              ;;
+            minor)
+              next_version="v${major}.$((minor + 1)).0"
+              ;;
+            major)
+              next_version="v$((major + 1)).0.0"
+              ;;
+            *)
+              echo "Unsupported bump type: $bump_type"
+              exit 1
+              ;;
+          esac
+
+          echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+          echo "bump_type=$bump_type" >> "$GITHUB_OUTPUT"
+          echo "next_version=$next_version" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Release Publish"
+            echo ""
+            echo "- Baseline: \\`$baseline\\`"
+            echo "- Bump type: \\`$bump_type\\`"
+            echo "- Next version: \\`$next_version\\`"
+            echo "- Target SHA: \\`${{ github.event.pull_request.merge_commit_sha }}\\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT_VERSION: ${{ steps.compute.outputs.next_version }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$NEXT_VERSION" ]]; then
+            echo "Computed version is empty"
+            exit 1
+          fi
+
+          if git rev-parse "$NEXT_VERSION" >/dev/null 2>&1; then
+            echo "Tag $NEXT_VERSION already exists"
+            exit 1
+          fi
+
+          git tag "$NEXT_VERSION" "$MERGE_SHA"
+          git push origin "$NEXT_VERSION"
+
+          gh release create "$NEXT_VERSION" \
+            --target "$MERGE_SHA" \
+            --title "$NEXT_VERSION" \
+            --notes "Automated release from merged PR #$PR_NUMBER"
