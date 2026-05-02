@@ -1,6 +1,7 @@
 package app
 
 import (
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"io"
@@ -66,6 +67,7 @@ type Application struct {
 	logOutput      io.Writer
 	serverReady    bool
 	securityReady  bool
+	rsaPrivateKey  *rsa.PrivateKey
 }
 
 // GetConfig returns a read-only snapshot of the current runtime config.
@@ -76,6 +78,14 @@ func (a *Application) GetConfig() config.Config {
 // GetSecurityValidator returns the current security validator when wired.
 func (a *Application) GetSecurityValidator() security.Validator {
 	return a.validator
+}
+
+// GetRSAPrivateKey returns the RSA private key derived during security wiring.
+//
+// Returns nil when security was not wired, algorithm is not RS256, or the
+// configured key source does not provide a private key (e.g. PublicPEM).
+func (a *Application) GetRSAPrivateKey() *rsa.PrivateKey {
+	return a.rsaPrivateKey
 }
 
 // IsSecurityReady reports whether security runtime was fully wired.
@@ -220,6 +230,7 @@ func (a *Application) UseServerSecurityFromConfig() (*Application, error) {
 	}
 
 	a.UseServerSecurity(validator)
+	a.rsaPrivateKey = compat.RSAPrivateKey
 	return a, nil
 }
 

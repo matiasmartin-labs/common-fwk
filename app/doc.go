@@ -6,16 +6,25 @@
 //	GetSecurityValidator() security.Validator
 //	IsSecurityReady() bool
 //	GetLogger(name string) (logging.Logger, error)
+//	GetRSAPrivateKey() *rsa.PrivateKey
 //
 // Lifecycle contract:
 //   - Pre-init (fresh NewApplication): GetConfig returns zero-value config snapshot,
-//     GetSecurityValidator returns nil, IsSecurityReady returns false, and
-//     GetLogger(...) returns ErrLoggingNotReady.
+//     GetSecurityValidator returns nil, IsSecurityReady returns false,
+//     GetRSAPrivateKey returns nil, and GetLogger(...) returns ErrLoggingNotReady.
 //   - Partial-init (after UseConfig only): GetConfig reflects configured values,
 //     security accessors still report unavailable state (nil/false), and logging
 //     runtime is available for deterministic named logger access.
 //   - Post-init (after security wiring succeeds): GetSecurityValidator is non-nil and
 //     IsSecurityReady is true.
+//
+// RSA private key accessor:
+//   - GetRSAPrivateKey() returns a non-nil *rsa.PrivateKey when security was wired
+//     via UseServerSecurityFromConfig() with RS256 algorithm and a Generated or
+//     PrivatePEM key source.
+//   - Returns nil when key source is PublicPEM, when security was wired via
+//     UseServerSecurity(v) directly, or when security was never wired.
+//   - Never panics regardless of bootstrap state.
 //
 // Immutability contract:
 // GetConfig returns a defensive snapshot. Mutable descendants like
