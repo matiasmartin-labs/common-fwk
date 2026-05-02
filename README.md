@@ -479,10 +479,14 @@ Accessor lifecycle + immutability contract:
 - `GetSecurityValidator() security.Validator`
 - `IsSecurityReady() bool`
 - `GetRSAPrivateKey() *rsa.PrivateKey`
+- `GetRSAPublicKey() *rsa.PublicKey`
+- `GetRSAKeyID() string`
 - `GetConfig()` is safe in all lifecycle stages and never triggers implicit bootstrap.
 - Before security wiring, `GetSecurityValidator()` returns `nil` and `IsSecurityReady()` returns `false`.
 - `GetConfig()` deep-copies mutable descendants (OAuth2 providers map and nested scopes slices) on each read.
 - `GetRSAPrivateKey()` returns a non-nil key only when `UseServerSecurityFromConfig()` was called with RS256 algorithm and `Generated` or `PrivatePEM` key source. Returns `nil` for `PublicPEM`, direct `UseServerSecurity(v)` wiring, or when no security is wired. Never panics.
+- `GetRSAPublicKey()` returns a non-nil key for any RS256 key source (`Generated`, `PrivatePEM`, `PublicPEM`). Returns `nil` for direct `UseServerSecurity(v)` wiring or when no security is wired. Never panics.
+- `GetRSAKeyID()` returns the non-empty key ID for any RS256 key source. Returns empty string for direct `UseServerSecurity(v)` wiring or when no security is wired. Never panics.
 
 ### 6) Named logger registry (`GetLogger`) and logging config
 

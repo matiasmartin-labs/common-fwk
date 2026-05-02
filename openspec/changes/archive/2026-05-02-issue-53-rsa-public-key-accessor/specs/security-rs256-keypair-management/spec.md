@@ -1,10 +1,6 @@
-# security-rs256-keypair-management Specification
+# Delta for security-rs256-keypair-management
 
-## Purpose
-
-Define provider-agnostic, deterministic in-memory RSA keypair management contracts for RS256 validator bootstrap.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Deterministic in-memory keypair generation
 
@@ -49,6 +45,8 @@ Keypair management APIs MUST remain inside `security/*` without provider-specifi
 - GIVEN package `security/keys` is built and tested in isolation
 - WHEN dependency graph is evaluated
 - THEN no provider-specific adapter dependency is required
+
+## ADDED Requirements
 
 ### Requirement: RSA public key accessor on Application
 

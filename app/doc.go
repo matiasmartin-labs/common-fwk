@@ -7,6 +7,8 @@
 //	IsSecurityReady() bool
 //	GetLogger(name string) (logging.Logger, error)
 //	GetRSAPrivateKey() *rsa.PrivateKey
+//	GetRSAPublicKey() *rsa.PublicKey
+//	GetRSAKeyID() string
 //
 // Lifecycle contract:
 //   - Pre-init (fresh NewApplication): GetConfig returns zero-value config snapshot,
@@ -24,6 +26,20 @@
 //     PrivatePEM key source.
 //   - Returns nil when key source is PublicPEM, when security was wired via
 //     UseServerSecurity(v) directly, or when security was never wired.
+//   - Never panics regardless of bootstrap state.
+//
+// RSA public key accessor:
+//   - GetRSAPublicKey() returns a non-nil *rsa.PublicKey when security was wired
+//     via UseServerSecurityFromConfig() with RS256 algorithm (any key source).
+//   - Returns nil when security was wired via UseServerSecurity(v) directly,
+//     when algorithm is not RS256, or when security was never wired.
+//   - Never panics regardless of bootstrap state.
+//
+// RSA key ID accessor:
+//   - GetRSAKeyID() returns the non-empty key ID string when security was wired
+//     via UseServerSecurityFromConfig() with RS256 algorithm (any key source).
+//   - Returns empty string when security was wired via UseServerSecurity(v) directly,
+//     when algorithm is not RS256, or when security was never wired.
 //   - Never panics regardless of bootstrap state.
 //
 // Immutability contract:

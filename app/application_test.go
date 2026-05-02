@@ -1426,3 +1426,167 @@ func TestGetRSAPrivateKey(t *testing.T) {
 		})
 	}
 }
+
+func TestGetRSAPublicKey(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		setup      func(t *testing.T) *Application
+		wantNonNil bool
+	}{
+		{
+			name: "Generated key source returns non-nil",
+			setup: func(t *testing.T) *Application {
+				a := NewApplication().UseConfig(rs256AppConfig(config.NewRS256GeneratedConfig("gen-key")))
+				_, err := a.UseServerSecurityFromConfig()
+				if err != nil {
+					t.Fatalf("UseServerSecurityFromConfig: %v", err)
+				}
+				return a
+			},
+			wantNonNil: true,
+		},
+		{
+			name: "PrivatePEM key source returns non-nil",
+			setup: func(t *testing.T) *Application {
+				a := NewApplication().UseConfig(rs256AppConfig(config.NewRS256PrivatePEMConfig("priv-key", mustRSAPrivatePEM(t))))
+				_, err := a.UseServerSecurityFromConfig()
+				if err != nil {
+					t.Fatalf("UseServerSecurityFromConfig: %v", err)
+				}
+				return a
+			},
+			wantNonNil: true,
+		},
+		{
+			name: "PublicPEM key source returns non-nil",
+			setup: func(t *testing.T) *Application {
+				a := NewApplication().UseConfig(rs256AppConfig(config.NewRS256PublicPEMConfig("pub-key", mustRSAPublicPEM(t))))
+				_, err := a.UseServerSecurityFromConfig()
+				if err != nil {
+					t.Fatalf("UseServerSecurityFromConfig: %v", err)
+				}
+				return a
+			},
+			wantNonNil: true,
+		},
+		{
+			name: "HS256 algorithm returns nil",
+			setup: func(_ *testing.T) *Application {
+				return NewApplication().UseConfig(testConfig()).UseServerSecurity(&fakeValidator{})
+			},
+			wantNonNil: false,
+		},
+		{
+			name: "no security wired returns nil without panic",
+			setup: func(_ *testing.T) *Application {
+				return NewApplication()
+			},
+			wantNonNil: false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			a := tc.setup(t)
+
+			var got *rsa.PublicKey
+			mustNotPanic(t, "GetRSAPublicKey", func() {
+				got = a.GetRSAPublicKey()
+			})
+
+			if tc.wantNonNil && got == nil {
+				t.Fatalf("expected non-nil RSA public key, got nil")
+			}
+			if !tc.wantNonNil && got != nil {
+				t.Fatalf("expected nil RSA public key, got non-nil")
+			}
+		})
+	}
+}
+
+func TestGetRSAKeyID(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		setup         func(t *testing.T) *Application
+		wantNonEmpty  bool
+	}{
+		{
+			name: "Generated key source returns non-empty key ID",
+			setup: func(t *testing.T) *Application {
+				a := NewApplication().UseConfig(rs256AppConfig(config.NewRS256GeneratedConfig("my-key")))
+				_, err := a.UseServerSecurityFromConfig()
+				if err != nil {
+					t.Fatalf("UseServerSecurityFromConfig: %v", err)
+				}
+				return a
+			},
+			wantNonEmpty: true,
+		},
+		{
+			name: "PrivatePEM key source returns non-empty key ID",
+			setup: func(t *testing.T) *Application {
+				a := NewApplication().UseConfig(rs256AppConfig(config.NewRS256PrivatePEMConfig("my-key", mustRSAPrivatePEM(t))))
+				_, err := a.UseServerSecurityFromConfig()
+				if err != nil {
+					t.Fatalf("UseServerSecurityFromConfig: %v", err)
+				}
+				return a
+			},
+			wantNonEmpty: true,
+		},
+		{
+			name: "PublicPEM key source returns non-empty key ID",
+			setup: func(t *testing.T) *Application {
+				a := NewApplication().UseConfig(rs256AppConfig(config.NewRS256PublicPEMConfig("my-key", mustRSAPublicPEM(t))))
+				_, err := a.UseServerSecurityFromConfig()
+				if err != nil {
+					t.Fatalf("UseServerSecurityFromConfig: %v", err)
+				}
+				return a
+			},
+			wantNonEmpty: true,
+		},
+		{
+			name: "HS256 algorithm returns empty key ID",
+			setup: func(_ *testing.T) *Application {
+				return NewApplication().UseConfig(testConfig()).UseServerSecurity(&fakeValidator{})
+			},
+			wantNonEmpty: false,
+		},
+		{
+			name: "no security wired returns empty without panic",
+			setup: func(_ *testing.T) *Application {
+				return NewApplication()
+			},
+			wantNonEmpty: false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			a := tc.setup(t)
+
+			var got string
+			mustNotPanic(t, "GetRSAKeyID", func() {
+				got = a.GetRSAKeyID()
+			})
+
+			if tc.wantNonEmpty && got == "" {
+				t.Fatalf("expected non-empty RSA key ID, got empty")
+			}
+			if !tc.wantNonEmpty && got != "" {
+				t.Fatalf("expected empty RSA key ID, got %q", got)
+			}
+		})
+	}
+}
