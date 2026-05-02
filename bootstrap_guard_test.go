@@ -278,8 +278,8 @@ func TestDocsRuntimeLimitsContract(t *testing.T) {
 			},
 		},
 		{
-			name: "docs home includes runtime-limit keys defaults env and example",
-			path: filepath.Join("docs", "home.md"),
+			name: "architecture config-core includes runtime-limit keys defaults env and example",
+			path: filepath.Join("docs", "architecture", "config-core.md"),
 			fragments: []string{
 				"read-timeout",
 				"write-timeout",
@@ -324,19 +324,12 @@ func TestDocsJWTModeReleaseAndMigrationContracts(t *testing.T) {
 		fragments []string
 	}{
 		{
-			name: "release checklist includes HS256 and RS256 verification checkpoints",
-			path: filepath.Join("docs", "releases", "v0.2.0-checklist.md"),
+			name: "architecture security-jwt includes HS256 and RS256 migration checkpoints",
+			path: filepath.Join("docs", "architecture", "security-jwt.md"),
 			fragments: []string{
 				"Validate JWT mode-aware docs include HS256 default behavior and RS256 bootstrap keys",
 				"Verify RS256 key-source coverage in tests (`generated`, `public-pem`, `private-pem`).",
 				"Verify HS256 backward compatibility tests remain green.",
-				"Validate migration guide at `docs/migration/auth-provider-ms-v0.1.0.md` is complete.",
-			},
-		},
-		{
-			name: "migration guide includes executable HS256 to RS256 sequence and parity checks",
-			path: filepath.Join("docs", "migration", "auth-provider-ms-v0.1.0.md"),
-			fragments: []string{
 				"HS256 -> RS256 executable transition sequence",
 				"security.auth.jwt.algorithm=RS256",
 				"security.auth.jwt.rs256-key-source",

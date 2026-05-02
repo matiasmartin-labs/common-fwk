@@ -14,7 +14,13 @@ until the caller explicitly enables them.
 
 ## API
 
+Method signature:
+
 ```go
+EnableHealthReadinessPresets(opts HealthReadinessOptions) error
+```
+
+Example:
 err := application.EnableHealthReadinessPresets(app.HealthReadinessOptions{
     HealthPath: "/healthz",  // optional — defaults to /healthz
     ReadyPath:  "/readyz",   // optional — defaults to /readyz
@@ -50,6 +56,11 @@ Readiness checks are evaluated **synchronously and deterministically** on each r
 | Path conflicts with existing route | `app.ErrRouteConflict` |
 
 No partial registration occurs on error — all-or-nothing.
+
+## Custom Paths
+
+Custom paths are honored per endpoint (`HealthPath`, `ReadyPath`) with no implicit duplication of defaults.
+When a custom path is provided, only that path is registered — default paths are not duplicated.
 
 ## Non-Goals
 

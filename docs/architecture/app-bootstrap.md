@@ -86,6 +86,16 @@ err := application.EnableHealthReadinessPresets(app.HealthReadinessOptions{
 
 ## Read-Only Runtime Accessors
 
+Accessor method signatures:
+
+- `GetConfig() config.Config`
+- `GetSecurityValidator() security.Validator`
+- `IsSecurityReady() bool`
+- `GetLogger(name string) (logging.Logger, error)`
+- `GetRSAPrivateKey() *rsa.PrivateKey`
+- `GetRSAPublicKey() *rsa.PublicKey`
+- `GetRSAKeyID() string`
+
 ```go
 cfg := application.GetConfig()                         // config.Config snapshot
 v   := application.GetSecurityValidator()              // security.Validator or nil
@@ -96,6 +106,10 @@ key := application.GetRSAPrivateKey()                  // *rsa.PrivateKey or nil
 
 ### Lifecycle semantics
 
+Pre-init (before `UseConfig`): `GetConfig()` returns a zero-value snapshot, `GetSecurityValidator()` returns `nil`, `IsSecurityReady()` returns `false`.
+
+Post-init (after security wiring via `UseServerSecurity` or `UseServerSecurityFromConfig`): `GetSecurityValidator()` returns non-`nil` and `IsSecurityReady()` returns `true`.
+
 | Stage | `GetConfig()` | `GetSecurityValidator()` | `IsSecurityReady()` | `GetLogger()` | `GetRSAPrivateKey()` |
 |---|---|---|---|---|---|
 | Pre-init | zero-value snapshot | `nil` | `false` | `ErrLoggingNotReady` | `nil` |
@@ -103,7 +117,7 @@ key := application.GetRSAPrivateKey()                  // *rsa.PrivateKey or nil
 | Post-`UseServerSecurity` (direct) | live snapshot | non-`nil` | `true` | available | `nil` |
 | Post-`UseServerSecurityFromConfig` with RS256 Generated/PrivatePEM | live snapshot | non-`nil` | `true` | available | non-nil `*rsa.PrivateKey` |
 
-`GetConfig()` returns a **defensive snapshot** — mutations to the returned value do not affect internal state.
+`GetConfig()` returns a **defensive snapshot** — mutations to the returned value do not affect internal runtime state.
 
 `GetRSAPrivateKey()` returns the RSA private key only when `UseServerSecurityFromConfig()` was called with a `Generated` or `PrivatePEM` key source. Returns `nil` for `PublicPEM` sources and for the `UseServerSecurity(v)` path.
 
