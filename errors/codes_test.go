@@ -21,6 +21,8 @@ func TestAuthErrorCodes(t *testing.T) {
 		{"CodeTokenGenerationFailed", fwkerrors.CodeTokenGenerationFailed, "auth_token_generation_failed"},
 		{"CodeClaimsMissing", fwkerrors.CodeClaimsMissing, "auth_claims_missing"},
 		{"CodeClaimsInvalid", fwkerrors.CodeClaimsInvalid, "auth_claims_invalid"},
+		{name: "not_found", got: fwkerrors.CodeNotFound, want: "not_found"},
+		{name: "method_not_allowed", got: fwkerrors.CodeMethodNotAllowed, want: "method_not_allowed"},
 	}
 
 	for _, tc := range tests {

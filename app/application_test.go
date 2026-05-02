@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/matiasmartin-labs/common-fwk/config"
+	fwkerrors "github.com/matiasmartin-labs/common-fwk/errors"
 	"github.com/matiasmartin-labs/common-fwk/logging"
 	"github.com/matiasmartin-labs/common-fwk/security/claims"
 )
@@ -1188,6 +1190,83 @@ func TestDocumentation_LoggingContractSynchronization(t *testing.T) {
 				t.Fatalf("%s must include collector-first Loki guidance", doc.name)
 			}
 		})
+	}
+}
+
+func TestUseServer_UnregisteredRoute_Returns404JSON(t *testing.T) {
+	a := NewApplication().UseConfig(testConfig()).UseServer()
+
+	w := httptest.NewRecorder()
+	a.handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/nonexistent", nil))
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 got %d", w.Code)
+	}
+
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Fatalf("expected Content-Type application/json, got %q", ct)
+	}
+
+	var resp struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response body: %v", err)
+	}
+	if resp.Code != fwkerrors.CodeNotFound {
+		t.Fatalf("expected code %q got %q", fwkerrors.CodeNotFound, resp.Code)
+	}
+	if resp.Message == "" {
+		t.Fatalf("expected non-empty message")
+	}
+}
+
+func TestUseServer_WrongMethod_Returns405JSON(t *testing.T) {
+	a := NewApplication().UseConfig(testConfig()).UseServer()
+
+	if err := a.RegisterGET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) }); err != nil {
+		t.Fatalf("register route: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	a.handler.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/ping", nil))
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 got %d", w.Code)
+	}
+
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Fatalf("expected Content-Type application/json, got %q", ct)
+	}
+
+	var resp struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response body: %v", err)
+	}
+	if resp.Code != fwkerrors.CodeMethodNotAllowed {
+		t.Fatalf("expected code %q got %q", fwkerrors.CodeMethodNotAllowed, resp.Code)
+	}
+	if resp.Message == "" {
+		t.Fatalf("expected non-empty message")
+	}
+}
+
+func TestUseServer_RegisteredRoute_CorrectMethod_Returns200(t *testing.T) {
+	a := NewApplication().UseConfig(testConfig()).UseServer()
+
+	if err := a.RegisterGET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) }); err != nil {
+		t.Fatalf("register route: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	a.handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ping", nil))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d", w.Code)
 	}
 }
 

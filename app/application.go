@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/matiasmartin-labs/common-fwk/config"
+	fwkerrors "github.com/matiasmartin-labs/common-fwk/errors"
 	httpgin "github.com/matiasmartin-labs/common-fwk/http/gin"
 	"github.com/matiasmartin-labs/common-fwk/logging"
 	loggingslog "github.com/matiasmartin-labs/common-fwk/logging/slog"
@@ -167,6 +168,22 @@ func (a *Application) UseServer() *Application {
 	if a.handler == nil {
 		a.handler = gin.New()
 	}
+
+	a.handler.HandleMethodNotAllowed = true
+
+	a.handler.NoRoute(func(c *gin.Context) {
+		c.AbortWithStatusJSON(http.StatusNotFound, httpgin.ErrorResponse{
+			Code:    fwkerrors.CodeNotFound,
+			Message: "route not found",
+		})
+	})
+
+	a.handler.NoMethod(func(c *gin.Context) {
+		c.AbortWithStatusJSON(http.StatusMethodNotAllowed, httpgin.ErrorResponse{
+			Code:    fwkerrors.CodeMethodNotAllowed,
+			Message: "method not allowed",
+		})
+	})
 
 	a.server.Handler = a.handler
 	a.server.ReadTimeout = a.cfg.Server.ReadTimeout

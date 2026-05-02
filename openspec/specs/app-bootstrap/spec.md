@@ -19,7 +19,7 @@ The framework MUST provide an instance-scoped `Application` bootstrap API in `ap
 
 ### Requirement: Fluent setup methods
 
-`UseConfig(cfg config.Config)`, `UseServer()`, and `UseServerSecurity(v security.Validator)` MUST support fluent chaining on the same `Application` instance. `UseServer()` MUST apply `cfg.Server.ReadTimeout`, `cfg.Server.WriteTimeout`, and `cfg.Server.MaxHeaderBytes` to the underlying `http.Server` created for application runtime.
+`UseConfig(cfg config.Config)`, `UseServer()`, and `UseServerSecurity(v security.Validator)` MUST support fluent chaining on the same `Application` instance. `UseServer()` MUST apply `cfg.Server.ReadTimeout`, `cfg.Server.WriteTimeout`, and `cfg.Server.MaxHeaderBytes` to the underlying `http.Server`. `UseServer()` MUST also register a JSON 404 handler, a JSON 405 handler, and enable `HandleMethodNotAllowed` on the underlying Gin engine.
 
 #### Scenario: Fluent chain remains supported
 
@@ -40,6 +40,36 @@ The framework MUST provide an instance-scoped `Application` bootstrap API in `ap
 - GIVEN `UseConfig` receives a config built with core default server runtime limits
 - WHEN `UseServer()` initializes runtime server wiring
 - THEN `http.Server` runtime-limit fields equal the documented defaults
+
+#### Scenario: GET on unregistered route returns 404 JSON
+
+- GIVEN `UseServer()` has been called
+- WHEN a GET request is sent to a path that has no registered route
+- THEN the response status is `404 Not Found`
+- AND the response body is `{"code":"not_found","message":"route not found"}`
+- AND the `Content-Type` header is `application/json`
+
+#### Scenario: Wrong HTTP method on registered route returns 405 JSON
+
+- GIVEN `UseServer()` has been called and a route is registered for path `/ping` with method GET
+- WHEN a DELETE request is sent to `/ping`
+- THEN the response status is `405 Method Not Allowed`
+- AND the response body is `{"code":"method_not_allowed","message":"method not allowed"}`
+- AND the `Content-Type` header is `application/json`
+
+#### Scenario: Correct method on registered route returns normal response (regression)
+
+- GIVEN a route is registered for `GET /ping` returning `200`
+- WHEN a GET request is sent to `/ping`
+- THEN the response status is `200 OK`
+- AND the JSON 404/405 handlers do not interfere
+
+#### Scenario: Health and readiness routes still respond (regression)
+
+- GIVEN `UseServer()` has been called with health/readiness presets registered
+- WHEN GET requests are sent to `/health` and `/ready`
+- THEN both routes respond with their normal status codes
+- AND neither triggers the 404 JSON handler
 
 ### Requirement: Route registration API
 
