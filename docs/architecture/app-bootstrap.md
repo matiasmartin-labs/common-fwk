@@ -42,6 +42,15 @@ Stores runtime config snapshot. Must be called before `UseServer`.
 Initializes the HTTP server using server runtime limits from config:
 - `ReadTimeout`, `WriteTimeout`, `MaxHeaderBytes`
 
+Also registers default JSON fallback handlers for unmatched routes and unsupported methods:
+
+| Trigger | Status | Response body |
+|---|---|---|
+| Unmatched route | `404` | `{"code":"not_found","message":"route not found"}` |
+| Wrong HTTP method | `405` | `{"code":"method_not_allowed","message":"method not allowed"}` |
+
+Both handlers use the same `ErrorResponse` shape as auth middleware errors, preserving a uniform JSON contract across all API surfaces. Consumers may re-register custom `NoRoute`/`NoMethod` handlers on the engine after calling `UseServer()` if a different response shape is required.
+
 ### `UseServerSecurity(v security.Validator) *Application`
 
 Wires JWT security for protected route middleware. Must be called after `UseServer`.
