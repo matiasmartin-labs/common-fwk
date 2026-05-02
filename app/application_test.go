@@ -1029,7 +1029,7 @@ func TestDocumentation_AccessorContractSynchronization(t *testing.T) {
 	docs := []docSpec{
 		{name: "package docs", path: "doc.go"},
 		{name: "readme", path: "../README.md"},
-		{name: "docs home", path: "../docs/home.md"},
+		{name: "architecture app-bootstrap", path: "../docs/architecture/app-bootstrap.md"},
 	}
 
 	sharedSignatures := []string{
@@ -1093,7 +1093,7 @@ func TestDocumentation_HealthReadinessPresetContractSynchronization(t *testing.T
 	docs := []docSpec{
 		{name: "package docs", path: "doc.go"},
 		{name: "readme", path: "../README.md"},
-		{name: "docs home", path: "../docs/home.md"},
+		{name: "architecture health-readiness", path: "../docs/architecture/health-readiness.md"},
 	}
 
 	for _, doc := range docs {
@@ -1152,9 +1152,7 @@ func TestDocumentation_LoggingContractSynchronization(t *testing.T) {
 	docs := []docSpec{
 		{name: "package docs", path: "doc.go"},
 		{name: "readme", path: "../README.md"},
-		{name: "docs home", path: "../docs/home.md"},
-		{name: "migration guide", path: "../docs/migration/auth-provider-ms-v0.1.0.md"},
-		{name: "release checklist", path: "../docs/releases/v0.2.0-checklist.md"},
+		{name: "architecture logging-registry", path: "../docs/architecture/logging-registry.md"},
 	}
 
 	for _, doc := range docs {

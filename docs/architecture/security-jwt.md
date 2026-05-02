@@ -104,6 +104,27 @@ opts := jwt.ValidatorOptions{
 validator, err := jwt.NewValidatorWithOptions(opts, resolver)
 ```
 
+## HS256 to RS256 Migration
+
+### HS256 -> RS256 executable transition sequence
+
+1. Set `security.auth.jwt.algorithm=RS256` in config.
+2. Set `security.auth.jwt.rs256-key-source` to `generated`, `public-pem`, or `private-pem`.
+3. Set `security.auth.jwt.rs256-key-id` to the key ID consumers expect.
+4. Remove or retire the HS256 shared secret from config.
+
+### Validation checkpoints
+
+- Validate JWT mode-aware docs include HS256 default behavior and RS256 bootstrap keys
+- Verify RS256 key-source coverage in tests (`generated`, `public-pem`, `private-pem`).
+- Verify HS256 backward compatibility tests remain green.
+
+### Behavioral invariants after migration
+
+- Protected routes still reject missing token with `401`.
+- Valid RS256 token for configured issuer passes.
+- HS256 path remains valid for services that have not migrated yet (default algorithm behavior).
+
 ## Boundaries
 
 - No Gin dependency.

@@ -26,6 +26,8 @@ type Logger interface {
 
 ## Access via Application
 
+Method signature: `GetLogger(name string) (logging.Logger, error)`
+
 ```go
 logger, err := application.GetLogger("auth")
 ```
@@ -43,6 +45,14 @@ Same logger name on the same `Application` instance always returns the same `Log
 Logger caches are isolated per `Application`.
 
 ## Config Keys
+
+Available config keys:
+
+- `logging.enabled` (default `true`)
+- `logging.level` (default `info`; accepted `debug|info|warn|error`)
+- `logging.format` (default `json`; accepted `json|text`)
+- `logging.loggers.<name>.enabled` (optional per-logger override)
+- `logging.loggers.<name>.level` (optional per-logger override)
 
 ```yaml
 logging:
