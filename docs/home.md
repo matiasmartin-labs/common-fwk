@@ -63,15 +63,27 @@ server:
 - `GetSecurityValidator() security.Validator`
 - `IsSecurityReady() bool`
 - `GetRSAPrivateKey() *rsa.PrivateKey`
+- `GetRSAPublicKey() *rsa.PublicKey`
+- `GetRSAKeyID() string`
 
 Lifecycle semantics are explicit and deterministic:
-- Pre-init (`NewApplication()`): config accessor returns zero-value snapshot; security accessors return `nil` / `false`; `GetRSAPrivateKey()` returns `nil`.
+- Pre-init (`NewApplication()`): config accessor returns zero-value snapshot; security accessors return `nil` / `false`; `GetRSAPrivateKey()` returns `nil`; `GetRSAPublicKey()` returns `nil`; `GetRSAKeyID()` returns `""`.
 - Partial-init (`UseConfig(...)` only): config accessor reflects configured runtime state; security accessors remain `nil` / `false`.
 - Post-init (security wiring success): security validator accessor is non-`nil` and `IsSecurityReady()` is `true`.
 
 RSA private key accessor (`GetRSAPrivateKey()`):
 - Returns a non-nil `*rsa.PrivateKey` only when `UseServerSecurityFromConfig()` is called with RS256 algorithm and `Generated` or `PrivatePEM` key source.
 - Returns `nil` for `PublicPEM` key source, direct `UseServerSecurity(v)` wiring, or when no security is wired.
+- Never panics regardless of bootstrap state.
+
+RSA public key accessor (`GetRSAPublicKey()`):
+- Returns a non-nil `*rsa.PublicKey` for any RS256 key source (`Generated`, `PrivatePEM`, `PublicPEM`).
+- Returns `nil` for direct `UseServerSecurity(v)` wiring or when no security is wired.
+- Never panics regardless of bootstrap state.
+
+RSA key ID accessor (`GetRSAKeyID()`):
+- Returns the non-empty key ID string for any RS256 key source.
+- Returns `""` for direct `UseServerSecurity(v)` wiring or when no security is wired.
 - Never panics regardless of bootstrap state.
 
 Immutability guarantee:

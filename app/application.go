@@ -68,6 +68,8 @@ type Application struct {
 	serverReady    bool
 	securityReady  bool
 	rsaPrivateKey  *rsa.PrivateKey
+	rsaPublicKey   *rsa.PublicKey
+	rsaKeyID       string
 }
 
 // GetConfig returns a read-only snapshot of the current runtime config.
@@ -86,6 +88,23 @@ func (a *Application) GetSecurityValidator() security.Validator {
 // configured key source does not provide a private key (e.g. PublicPEM).
 func (a *Application) GetRSAPrivateKey() *rsa.PrivateKey {
 	return a.rsaPrivateKey
+}
+
+// GetRSAPublicKey returns the RSA public key derived during security wiring.
+//
+// Returns non-nil for any RS256 key source (Generated, PrivatePEM, PublicPEM).
+// Returns nil when security was not wired via UseServerSecurityFromConfig or
+// algorithm is not RS256.
+func (a *Application) GetRSAPublicKey() *rsa.PublicKey {
+	return a.rsaPublicKey
+}
+
+// GetRSAKeyID returns the key ID associated with the RSA key during security wiring.
+//
+// Returns non-empty for any RS256 key source. Returns empty string when security
+// was not wired via UseServerSecurityFromConfig or algorithm is not RS256.
+func (a *Application) GetRSAKeyID() string {
+	return a.rsaKeyID
 }
 
 // IsSecurityReady reports whether security runtime was fully wired.
@@ -231,6 +250,8 @@ func (a *Application) UseServerSecurityFromConfig() (*Application, error) {
 
 	a.UseServerSecurity(validator)
 	a.rsaPrivateKey = compat.RSAPrivateKey
+	a.rsaPublicKey = compat.RSAPublicKey
+	a.rsaKeyID = compat.RSAKeyID
 	return a, nil
 }
 
