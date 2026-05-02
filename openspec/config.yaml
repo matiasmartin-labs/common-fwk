@@ -1,7 +1,0 @@
-strict_tdd: false
-
-rules:
-  verify:
-    test_command: "go test ./..."
-    build_command: "go build ./..."
-    coverage_threshold: 0
