@@ -46,6 +46,20 @@
 //   - Readiness endpoint returns `200` only when bootstrap invariants hold and all
 //     configured checks pass; otherwise it returns `503`.
 //
+// Default error handlers (implicit, registered by UseServer):
+//
+// `UseServer()` automatically registers JSON fallback handlers for unmatched
+// routes and unsupported methods, ensuring all API consumers receive a
+// consistent structured error body regardless of whether a route was registered:
+//
+//   - Unmatched route  → HTTP 404 {"code":"not_found","message":"route not found"}
+//   - Wrong method     → HTTP 405 {"code":"method_not_allowed","message":"method not allowed"}
+//
+// These handlers use the same [httpgin.ErrorResponse] shape as auth middleware
+// errors, preserving a uniform JSON error contract across the entire API surface.
+// Consumers may re-register their own NoRoute/NoMethod handlers on the engine
+// after calling UseServer() if a custom response shape is required.
+//
 // Non-goals:
 //   - No implicit route registration during bootstrap.
 //   - No provider-specific dependency probing in framework internals.
