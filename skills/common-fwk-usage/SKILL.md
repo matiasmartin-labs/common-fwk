@@ -4,9 +4,9 @@ description: >
   Create or update integration documentation and usage examples for common-fwk.
   Trigger: When writing README quickstarts, architecture overviews, package boundaries,
   or integration examples for config/security/http/app adapters.
-license: Apache-2.0
+license: MIT
 metadata:
-  author: gentleman-programming
+  author: Matias Martin
   version: "2.0"
 ---
 
