@@ -138,3 +138,109 @@ func mustPrivatePEM(t *testing.T) string {
 
 	return string(pem.EncodeToMemory(&blk))
 }
+
+func mustPublicPEM(t *testing.T) string {
+	t.Helper()
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate RSA key: %v", err)
+	}
+
+	der, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+	if err != nil {
+		t.Fatalf("marshal public key: %v", err)
+	}
+
+	blk := pem.Block{Type: "PUBLIC KEY", Bytes: der}
+	return string(pem.EncodeToMemory(&blk))
+}
+
+func TestFromConfigJWT_RSAPrivateKey(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		makeCfg    func(t *testing.T) config.JWTConfig
+		wantNonNil bool
+	}{
+		{
+			name: "RS256 Generated returns non-nil RSAPrivateKey",
+			makeCfg: func(_ *testing.T) config.JWTConfig {
+				return config.JWTConfig{
+					Algorithm:  config.JWTAlgorithmRS256,
+					Issuer:     "common-fwk",
+					TTLMinutes: 15,
+					RS256: config.RS256Config{
+						KeySource: config.RS256KeySourceGenerated,
+						KeyID:     "gen-key",
+					},
+				}
+			},
+			wantNonNil: true,
+		},
+		{
+			name: "RS256 PrivatePEM returns non-nil RSAPrivateKey",
+			makeCfg: func(t *testing.T) config.JWTConfig {
+				return config.JWTConfig{
+					Algorithm:  config.JWTAlgorithmRS256,
+					Issuer:     "common-fwk",
+					TTLMinutes: 15,
+					RS256: config.RS256Config{
+						KeySource:     config.RS256KeySourcePrivatePEM,
+						KeyID:         "priv-key",
+						PrivateKeyPEM: mustPrivatePEM(t),
+					},
+				}
+			},
+			wantNonNil: true,
+		},
+		{
+			name: "RS256 PublicPEM returns nil RSAPrivateKey",
+			makeCfg: func(t *testing.T) config.JWTConfig {
+				return config.JWTConfig{
+					Algorithm:  config.JWTAlgorithmRS256,
+					Issuer:     "common-fwk",
+					TTLMinutes: 15,
+					RS256: config.RS256Config{
+						KeySource:    config.RS256KeySourcePublicPEM,
+						KeyID:        "pub-key",
+						PublicKeyPEM: mustPublicPEM(t),
+					},
+				}
+			},
+			wantNonNil: false,
+		},
+		{
+			name: "HS256 returns nil RSAPrivateKey",
+			makeCfg: func(_ *testing.T) config.JWTConfig {
+				return config.JWTConfig{
+					Algorithm:  config.JWTAlgorithmHS256,
+					Secret:     "hs-secret",
+					Issuer:     "common-fwk",
+					TTLMinutes: 15,
+				}
+			},
+			wantNonNil: false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			compat, err := FromConfigJWT(tc.makeCfg(t))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tc.wantNonNil && compat.RSAPrivateKey == nil {
+				t.Fatalf("expected non-nil RSAPrivateKey, got nil")
+			}
+			if !tc.wantNonNil && compat.RSAPrivateKey != nil {
+				t.Fatalf("expected nil RSAPrivateKey, got non-nil")
+			}
+		})
+	}
+}

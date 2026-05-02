@@ -91,17 +91,21 @@ cfg := application.GetConfig()                         // config.Config snapshot
 v   := application.GetSecurityValidator()              // security.Validator or nil
 ok  := application.IsSecurityReady()                   // bool
 logger, err := application.GetLogger("auth")           // logging.Logger or error
+key := application.GetRSAPrivateKey()                  // *rsa.PrivateKey or nil
 ```
 
 ### Lifecycle semantics
 
-| Stage | `GetConfig()` | `GetSecurityValidator()` | `IsSecurityReady()` | `GetLogger()` |
-|---|---|---|---|---|
-| Pre-init | zero-value snapshot | `nil` | `false` | `ErrLoggingNotReady` |
-| `UseConfig` only | live snapshot | `nil` | `false` | available |
-| Post-`UseServerSecurity` | live snapshot | non-`nil` | `true` | available |
+| Stage | `GetConfig()` | `GetSecurityValidator()` | `IsSecurityReady()` | `GetLogger()` | `GetRSAPrivateKey()` |
+|---|---|---|---|---|---|
+| Pre-init | zero-value snapshot | `nil` | `false` | `ErrLoggingNotReady` | `nil` |
+| `UseConfig` only | live snapshot | `nil` | `false` | available | `nil` |
+| Post-`UseServerSecurity` (direct) | live snapshot | non-`nil` | `true` | available | `nil` |
+| Post-`UseServerSecurityFromConfig` with RS256 Generated/PrivatePEM | live snapshot | non-`nil` | `true` | available | non-nil `*rsa.PrivateKey` |
 
 `GetConfig()` returns a **defensive snapshot** — mutations to the returned value do not affect internal state.
+
+`GetRSAPrivateKey()` returns the RSA private key only when `UseServerSecurityFromConfig()` was called with a `Generated` or `PrivatePEM` key source. Returns `nil` for `PublicPEM` sources and for the `UseServerSecurity(v)` path.
 
 ## Named Logger
 

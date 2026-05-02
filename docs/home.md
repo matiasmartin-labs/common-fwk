@@ -62,11 +62,17 @@ server:
 - `GetConfig() config.Config`
 - `GetSecurityValidator() security.Validator`
 - `IsSecurityReady() bool`
+- `GetRSAPrivateKey() *rsa.PrivateKey`
 
 Lifecycle semantics are explicit and deterministic:
-- Pre-init (`NewApplication()`): config accessor returns zero-value snapshot; security accessors return `nil` / `false`.
+- Pre-init (`NewApplication()`): config accessor returns zero-value snapshot; security accessors return `nil` / `false`; `GetRSAPrivateKey()` returns `nil`.
 - Partial-init (`UseConfig(...)` only): config accessor reflects configured runtime state; security accessors remain `nil` / `false`.
 - Post-init (security wiring success): security validator accessor is non-`nil` and `IsSecurityReady()` is `true`.
+
+RSA private key accessor (`GetRSAPrivateKey()`):
+- Returns a non-nil `*rsa.PrivateKey` only when `UseServerSecurityFromConfig()` is called with RS256 algorithm and `Generated` or `PrivatePEM` key source.
+- Returns `nil` for `PublicPEM` key source, direct `UseServerSecurity(v)` wiring, or when no security is wired.
+- Never panics regardless of bootstrap state.
 
 Immutability guarantee:
 - `GetConfig()` returns a defensive snapshot with deep copies of mutable descendants (`OAuth2.Providers` and provider `Scopes`).
