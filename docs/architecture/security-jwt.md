@@ -72,6 +72,8 @@ Resolvers are deterministic and in-memory — no network I/O.
 
 Key selection is by `kid` header field, falling back to default if not present.
 
+When security is wired via `app.UseServerSecurityFromConfig()` with RS256, the generated or parsed private key is surfaced via `app.Application.GetRSAPrivateKey()`. This eliminates the need for callers to hold a separate private key reference outside the framework.
+
 ## HS256 Example
 
 ```go
@@ -84,6 +86,14 @@ validator, err := jwt.NewValidator(cfg.Security.Auth.JWT, resolver)
 ```go
 // From config (recommended)
 // UseServerSecurityFromConfig() handles this automatically
+
+app, err := application.UseServerSecurityFromConfig()
+// ...
+privKey := application.GetRSAPrivateKey() // non-nil for Generated/PrivatePEM sources
+tokenGen := token.NewJwtGenerator(token.JwtGeneratorConfig{
+    PrivateKey: privKey,
+    Issuer:     cfg.Security.Auth.JWT.Issuer,
+})
 
 // Manual
 resolver := keys.NewRSAPublicKeyResolver(pubKey, "my-key-id")
