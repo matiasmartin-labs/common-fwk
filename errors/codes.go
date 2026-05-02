@@ -3,6 +3,9 @@ package errors
 // Auth error codes returned in JSON error responses.
 // Consumers can compare against these constants instead of raw strings.
 const (
+	CodeNotFound         = "not_found"
+	CodeMethodNotAllowed = "method_not_allowed"
+
 	CodeTokenMissing          = "auth_token_missing"
 	CodeTokenInvalid          = "auth_token_invalid"
 	CodeCallbackStateInvalid  = "auth_callback_state_invalid"
